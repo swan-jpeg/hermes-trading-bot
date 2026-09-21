@@ -3,12 +3,19 @@
 Implementatie: eenvoudige regel-gebaseerde policy als warmstart + de
 reward-functie (rendement - drawdown-straf - turnover). De policy is
 vervangbaar door een getrainde PPO/SAC via stable-baselines3.
+
+Architectuurverbetering: de policy is nu PRIJS- en POSITIE-bewust. Hij
+ziet de huidige positie (entry, ongerealiseerde winst/verlies) en de
+huidige prijs, zodat hij expliciet winst kan nemen (take-profit),
+verlies kan beperken (stop-loss) en trailing stops kan toepassen —
+i.p.v. alleen te reageren op sentiment.
 """
 from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from hermes_bot.schemas import Action, RLRawDecision
+from hermes_bot.portfolio import PortfolioState
+from hermes_bot.schemas import Action, ExitReason, Position, RLRawDecision
 
 
 class BaseRLPolicy:
@@ -19,9 +26,11 @@ class BaseRLPolicy:
 
 
 class RulePolicy(BaseRLPolicy):
-    """Warmstart-policy: koop bij positief sentiment+zekerheid, verkoop bij negatief.
+    """Warmstart-policy: prijs-bewust + sentiment.
 
-    Dit is een deterministische baseline; vervang door getrainde RL.
+    Prioriteit (belangrijkste eerst):
+    1. EXIT-regels op bestaande posities (take-profit / stop-loss / trailing).
+    2. Sentiment-gestuurde BUY/SELL op nieuwe of bestaande posities.
     """
 
     def act(self, state: dict) -> RLRawDecision:
@@ -29,11 +38,36 @@ class RulePolicy(BaseRLPolicy):
         sentiment = state.get("sentiment", 0.0)
         zekerheid = state.get("zekerheid", 0.0)
         threshold = state.get("threshold", 0.3)
+        current_price = state.get("current_price", 0.0)
+        position: Position | None = state.get("position")
+        peak = state.get("peak", current_price)
 
+        # --- 1. Exit-regels op bestaande posities (winst nemen / verlies beperken).
+        if position is not None and current_price > 0:
+            reason = position.exit_reason_at(current_price, peak)
+            if reason != ExitReason.NONE:
+                # intent_to_alloc is een portfolio-gewicht (-1..+1), niet een
+                # absolute qty. Sluit de positie volledig (gewicht -1 = 100%).
+                pnl = position.unrealized_pnl_pct(current_price)
+                return RLRawDecision(
+                    entity=entity,
+                    action=Action.SELL,
+                    intent_to_alloc=-1.0,
+                    zekerheid=round(zekerheid, 4),
+                    rationale=f"exit: {reason.value} (pnl={pnl:.2%})",
+                    timestamp=datetime.now(UTC),
+                    exit_reason=reason,
+                )
+
+        # --- 2. Sentiment-gestuurde richting op nieuwe/bestaande posities.
         if sentiment > threshold and zekerheid > 0.5:
             action, alloc = Action.BUY, min(0.1, sentiment * zekerheid)
         elif sentiment < -threshold and zekerheid > 0.5:
-            action, alloc = Action.SELL, -min(0.1, abs(sentiment) * zekerheid)
+            # Verkoop (of verklein) bij negatief sentiment.
+            size = min(0.1, abs(sentiment) * zekerheid)
+            if position is not None:
+                size = min(size, position.qty)
+            action, alloc = Action.SELL, -size
         else:
             action, alloc = Action.HOLD, 0.0
 
@@ -44,11 +78,12 @@ class RulePolicy(BaseRLPolicy):
             zekerheid=round(zekerheid, 4),
             rationale=f"rule-policy: sentiment={sentiment:.2f}, zekerheid={zekerheid:.2f}",
             timestamp=datetime.now(UTC),
+            exit_reason=ExitReason.NONE,
         )
 
 
 class RLFusionModel:
-    """Centrale beslissingslaag: state = fusie + agent + regionaal + regime."""
+    """Centrale beslissingslaag: state = fusie + positie + regime + prijs."""
 
     def __init__(self, policy: BaseRLPolicy | None = None) -> None:
         self.policy = policy or RulePolicy()
@@ -57,17 +92,28 @@ class RLFusionModel:
         self,
         fusion: dict,
         entity_state: dict,
-        portfolio_state: dict,
+        portfolio_state: PortfolioState,
+        current_price: float = 0.0,
     ) -> RLRawDecision:
         """Bouw state-vector en laat policy een voorstel doen.
+
         Dit voorstel gaat ALTIJD eerst door de risico-engine.
+        portfolio_state is nu een PortfolioState (niet dict) zodat de policy
+        de open positie + entry-prijs ziet en winst kan nemen.
         """
+        entity = fusion.get("entity_id", entity_state.get("entity_id", "?"))
+        position = portfolio_state.positions.get(entity)
+        peak = portfolio_state.peak_for(entity, current_price) if position else current_price
+
         state = {
-            "entity": fusion.get("entity_id", entity_state.get("entity_id", "?")) ,
+            "entity": entity,
             "sentiment": fusion.get("emotie", {}).get("sentiment", 0.0),
             "zekerheid": fusion.get("zekerheid", 0.0),
             "kwaliteit": fusion.get("kwaliteit", 0.0),
-            "regime": portfolio_state.get("regime", "unknown"),
+            "regime": portfolio_state.regime,
+            "current_price": current_price,
+            "position": position,
+            "peak": peak,
         }
         return self.policy.act(state)
 

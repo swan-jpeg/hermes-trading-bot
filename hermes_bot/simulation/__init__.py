@@ -60,9 +60,11 @@ class MonteCarloEngine:
         es_95 = float(tail.mean()) if tail.size else var_95
 
         # Drawdown-distributie: max cumulatief verlies per pad.
+        # Per pad: gemiddelde dag-return over assets -> equity curve over horizon.
         dd = np.zeros(self.n_paths)
         for i in range(self.n_paths):
-            eq = np.cumprod(1 + paths[i].mean(axis=1) / horizon)  # benadering
+            daily = paths[i].mean() / horizon  # gelijkmatig verdeeld over horizon
+            eq = np.cumprod(1 + np.full(horizon, daily))
             peak = np.maximum.accumulate(eq)
             dd[i] = float(np.min(eq / peak - 1))
         dd_pct = {q: float(np.percentile(dd, q)) for q in (50, 90, 95)}

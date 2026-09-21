@@ -15,6 +15,17 @@ class Action(StrEnum):
     OTHER = "other"
 
 
+class ExitReason(StrEnum):
+    """Waarom een positie gesloten/verkleind wordt — maakt winst nemen expliciet."""
+
+    TAKE_PROFIT = "take_profit"
+    STOP_LOSS = "stop_loss"
+    TRAILING_STOP = "trailing_stop"
+    SENTIMENT = "sentiment"
+    RISK_OFF = "risk_off"
+    NONE = "none"
+
+
 class AssetClass(StrEnum):
     STOCK = "stock"
     ETF = "etf"
@@ -67,6 +78,39 @@ class EntityAnalysis(BaseModel):
     n_sources: int
 
 
+class Position(BaseModel):
+    """Een open positie. Geeft de beslissingslaag prijs-bewustzijn zodat
+    winst genomen en verlies beperkt kan worden ([[07]]/[[09]])."""
+
+    entity: str
+    qty: float = Field(gt=0.0)
+    entry_price: float = Field(gt=0.0)
+    entry_time: datetime
+    take_profit_pct: float = Field(default=0.15, ge=0.0)  # +15% default
+    stop_loss_pct: float = Field(default=0.08, ge=0.0)  # -8% default
+    trailing_stop_pct: float = Field(default=0.05, ge=0.0)  # -5% vanaf hoogtepunt
+
+    def unrealized_pnl_pct(self, current_price: float) -> float:
+        """On-gerealiseerde winst/verlies in % t.o.v. entry."""
+        if current_price <= 0:
+            return 0.0
+        return (current_price - self.entry_price) / self.entry_price
+
+    def exit_reason_at(self, current_price: float, peak_price: float) -> ExitReason:
+        """Bepaal of de positie gesloten moet worden o.b.v. prijsregels."""
+        pnl = self.unrealized_pnl_pct(current_price)
+        if pnl >= self.take_profit_pct:
+            return ExitReason.TAKE_PROFIT
+        if pnl <= -self.stop_loss_pct:
+            return ExitReason.STOP_LOSS
+        # Trailing stop: vanaf het hoogtepunt sinds entry.
+        if peak_price > self.entry_price:
+            drawdown_from_peak = (peak_price - current_price) / peak_price
+            if drawdown_from_peak >= self.trailing_stop_pct:
+                return ExitReason.TRAILING_STOP
+        return ExitReason.NONE
+
+
 class RLRawDecision(BaseModel):
     """Voorstel van de RL-laag. WORDT NOOIT DIRECT UITGEVOERD."""
 
@@ -76,6 +120,7 @@ class RLRawDecision(BaseModel):
     zekerheid: float = Field(ge=0.0, le=1.0)
     rationale: str
     timestamp: datetime
+    exit_reason: ExitReason = ExitReason.NONE  # gevuld bij SELL/HEDGE
 
 
 class RiskApproval(BaseModel):
@@ -88,6 +133,7 @@ class RiskApproval(BaseModel):
     drawdown_current: float = 0.0
     var_95: float = 0.0
     es_95: float = 0.0
+    crash_probability: float = Field(default=0.0, ge=0.0, le=1.0)
 
 
 class MonteCarloResult(BaseModel):
