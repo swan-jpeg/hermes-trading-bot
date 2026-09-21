@@ -4,6 +4,11 @@ Implementatie: B2B-vraag & supply-chain bottleneck analyse + regime-detectie.
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from hermes_bot.signals.textual import ReportSignal
+
 
 class BottleneckAnalyzer:
     """B2B-vraag & supply-chain bottleneck analyse.
@@ -50,6 +55,37 @@ class BottleneckAnalyzer:
         scored = [(n, self.bottleneck_score(n)) for n in self.graph]
         return sorted(scored, key=lambda x: -x[1])[:k]
 
+    def ingest(self, reports: list[ReportSignal]) -> dict[str, float]:
+        """Verwerk rapporten om vraagsignalen te halen voor bottleneck analyse.
+
+        Args:
+            reports: Lijst van ReportSignal objecten
+
+        Returns:
+            Dict met bottleneck scores voor elk knooppunt (product/sector)
+        """
+        # Voor nu een simpele implementatie
+        # In een echte implementatie zouden we:
+        # 1. Tekstanalyse van rapporten
+        # 2. Extractie van vraagsignalen
+        # 3. Mapping naar supply-chain knooppunten
+        
+        # Dummy implementatie
+        scores = {}
+        for report in reports:
+            # Simuleer dat we uit rapporten vraagsignalen halen
+            # Voor nu een simpele mapping op basis van keywords
+            text = report.body.lower()
+            if "supply" in text or "production" in text:
+                # Simuleer dat we een product vinden
+                scores["manufacturing"] = 0.7
+            if "capacity" in text or "shortage" in text:
+                scores["supply_chain"] = 0.8
+            if "lead time" in text or "delay" in text:
+                scores["logistics"] = 0.6
+                
+        return scores
+
 
 class RegimeDetector:
     """Classificeert markttoestand: bullish/bearish/highvol/crash."""
@@ -73,3 +109,59 @@ class RegimeDetector:
         if momentum > 0:
             return "bull"
         return "bear"
+
+
+class RegionalScorer:
+    """Analyseert regionale scores uit nieuws/alerts."""
+
+    def __init__(self) -> None:
+        # Regionale scores: veiligheid, tevredenheid, sociale zekerheid, bedrijfseconomisch
+        self.scores = {
+            "veiligheid": 0.0,
+            "tevredenheid": 0.0,
+            "sociale_zekerheid": 0.0,
+            "bedrijfseconomische_veranderingen": 0.0
+        }
+
+    def score_from_reports(self, reports: list[ReportSignal]) -> dict[str, float]:
+        """Bereken regionale scores uit rapporten.
+
+        Args:
+            reports: Lijst van ReportSignal objecten
+
+        Returns:
+            Dict met regionale scores
+        """
+        # Voor nu een simpele implementatie
+        # In een echte implementatie zouden we:
+        # 1. Tekstanalyse van rapporten
+        # 2. Extractie van regionale informatie
+        # 3. Scoring op basis van inhoud
+        
+        # Dummy implementatie
+        total_scores = {
+            "veiligheid": 0.0,
+            "tevredenheid": 0.0,
+            "sociale_zekerheid": 0.0,
+            "bedrijfseconomische_veranderingen": 0.0
+        }
+        
+        for report in reports:
+            text = report.body.lower()
+            
+            # Simpele keyword matching
+            if "crime" in text or "security" in text:
+                total_scores["veiligheid"] += 0.2
+            if "happiness" in text or "satisfaction" in text:
+                total_scores["tevredenheid"] += 0.2
+            if "unemployment" in text or "social" in text:
+                total_scores["sociale_zekerheid"] += 0.2
+            if "economy" in text or "growth" in text or "inflation" in text:
+                total_scores["bedrijfseconomische_veranderingen"] += 0.2
+                
+        # Normaliseer naar 0-1
+        normalized_scores = {}
+        for key, value in total_scores.items():
+            normalized_scores[key] = min(value, 1.0)
+            
+        return normalized_scores

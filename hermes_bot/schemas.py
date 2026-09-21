@@ -54,6 +54,15 @@ class BaseSignal(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
 
 
+class AlertSignal(BaseSignal):
+    source: SourceKind = SourceKind.ALERT
+    kind: str = "news"  # news | point_loop
+    headline: str = ""
+    body: str = ""
+    sentiment: float = 0.0  # -1..1
+    credibility: float = 0.5  # 0..1 bronweging
+
+
 class FusionSignal(BaseModel):
     """Uitgang van het fusiemodel ([[06]]). Kwaliteit/zekerheid/emotie."""
 
