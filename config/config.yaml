@@ -1,0 +1,49 @@
+# Hermes Trading Bot — runtime-instellingen (geen secrets; die gaan in .env)
+universe:
+  # Start klein: high-liquidity assets. Uitbreiden na validatie.
+  stocks:
+    - AAPL
+    - MSFT
+    - NVDA
+    - JPM
+  etfs:
+    - SPY
+    - QQQ
+    - EFA
+  bonds:
+    - AGG
+  cash: USD
+  regiones: [US, EU, JP]
+
+data:
+  market_feed: yfinance   # yfinance | polygon | alpaca
+  storage: postgres       # postgres | sqlite (dev)
+  sqlite_path: var/tradingbot.db
+
+fusion:
+  sources: [audiovisual, agent, regional, market]
+  weigh_by_credibility: true
+
+risk:
+  max_portfolio_drawdown: -0.08   # risk-off trigger
+  max_asset_weight: 0.10          # per asset
+  max_sector_risk: 0.20           # per sector/cluster
+  max_leverage: 0.0               # geen hefboom start
+  vol_target: 0.125               # annualized vol doel
+  cash_min_in_crash: 0.30
+
+rl:
+  algo: PPO           # PPO | SAC | CQL (offline)
+  reward_lam_drawdown: 0.5
+  reward_lam_turnover: 0.02
+  train_steps: 100000
+  seed: 42
+
+execution:
+  mode: paper          # paper | live
+  broker: alpaca       # alpaca | ibkr
+  fail_closed: true
+
+monitoring:
+  metrics_every_sec: 60
+  alert_channel: tui
