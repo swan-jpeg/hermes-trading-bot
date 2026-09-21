@@ -57,7 +57,7 @@ class SentimentAnalyzer:
         for text in texts:
             # Probeer FinBERT eerst
             try:
-                if self._finbert_model is None or self._finbert_tokenizer is None:
+                if self._finbert_model is None:
                     from transformers import pipeline
                     self._finbert_model = pipeline(
                         "sentiment-analysis",

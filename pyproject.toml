@@ -15,6 +15,7 @@ dependencies = [
     "pyyaml>=6.0,<7",
     "rich>=13,<14",
     "fire>=0.5,<1",
+    "opencv-python>=4.8,<5",
 ]
 
 [project.optional-dependencies]
@@ -28,6 +29,24 @@ ml = [
     "scikit-learn>=1.3,<2",
     "stable-baselines3>=2.1,<3",
     "gymnasium>=0.29,<1",
+]
+# Zware multimodale modellen (optioneel — apart installeren, groot).
+#   uv sync --extra ml --extra multimodal
+multimodal = [
+    "faster-whisper>=1.0,<2",          # spraak->tekst
+    "transformers>=4.40,<5",           # FinBERT / DeBERTa sentiment
+    "torch>=2.2,<3",                   # backend voor transformers
+    "deepface>=0.0.79,<1",             # gezichtsuitdrukking
+    "opencv-python>=4.8,<5",           # video-frame-verwerking
+    "opensmile>=2.5,<3",               # prosodie (pitch/volume/pauzes)
+    "librosa>=0.10,<1",                # audio-features
+    "soundfile>=0.12,<1",              # audio I/O
+]
+# MediaPipe apart: geeft op sommige CPU's een harde SIGILL-crash (geen
+# prebuilt). Installeer alleen op een machine waar het werkt (bv. Windows).
+#   uv sync --extra video
+video = [
+    "mediapipe>=0.10,<1",              # pose / gezichtsdetectie
 ]
 risk = [
     "scipy>=1.11,<2",
