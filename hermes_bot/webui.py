@@ -50,11 +50,27 @@ def _tree_html(path: Path, base: Path) -> str:
 
 
 def _vault_notes_html() -> str:
-    """Lijst Obsidian-noten in TradingBot/."""
-    tb = VAULT / "TradingBot"
+    """Toon de hele Obsidian-vault-boom (albums + TradingBot/ + noten)."""
     out: list[str] = []
-    if tb.is_dir():
-        for p in sorted(tb.glob("*.md")):
+    if not VAULT.is_dir():
+        return '<div class="file" style="color:#f7768e">⚠ vault niet bereikbaar</div>'
+    out.append(
+        f'<div class="file" style="color:#9ece6a">● synced — {VAULT}</div>'
+    )
+    for p in sorted(VAULT.iterdir()):
+        if p.name.startswith("."):
+            continue
+        if p.is_dir():
+            notes = sorted(p.glob("*.md"))
+            sub = "".join(
+                f'<div class="file"><a href="/vault?note={urllib.parse.quote(p.name + "/" + n.name)}">'
+                f"📝 {html.escape(n.stem)}</a></div>"
+                for n in notes[:30]
+            )
+            out.append(
+                f'<details><summary class="dir">📁 {html.escape(p.name)} · {len(notes)}</summary>{sub}</details>'
+            )
+        elif p.suffix == ".md":
             out.append(
                 f'<div class="file"><a href="/vault?note={urllib.parse.quote(p.name)}">'
                 f"📝 {html.escape(p.stem)}</a></div>"
@@ -144,8 +160,12 @@ class Handler(BaseHTTPRequestHandler):
                 content = "<h2>Code</h2>" + _tree_html(ROOT / "hermes_bot", ROOT)
         elif path == "/vault":
             note = qs.get("note", [""])[0]
-            target = VAULT / "TradingBot" / note
-            if target.is_file():
+            # Veilig: relatief pad binnen de vault (support geneste mappen).
+            rel = Path(note)
+            if any(part in ("..", "") for part in rel.parts):
+                rel = Path()
+            target = (VAULT / rel).resolve()
+            if target.is_file() and VAULT in target.parents:
                 content = f"<h2>📝 {html.escape(target.stem)}</h2>" + _render_md(target.read_text())
             else:
                 content = "<h2>Obsidian-noten</h2>" + _vault_notes_html()
