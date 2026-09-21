@@ -34,6 +34,31 @@ class BaseBroker:
         raise NotImplementedError
 
 
+class PaperBroker(BaseBroker):
+    """Simuleert fills zonder echt geld. Verplichte eerste stap."""
+
+    name = "paper"
+
+    def __init__(self) -> None:
+        self._positions: dict[str, float] = {}
+        self._fills: list[dict] = []
+
+    def submit(self, order: Order) -> Order:
+        # Paper: altijd gevuld tegen marktprijs (geen slippage in v1).
+        order.status = "filled"
+        self._positions[order.asset] = self._positions.get(order.asset, 0.0) + (
+            order.qty if order.side == "buy" else -order.qty
+        )
+        self._fills.append({"asset": order.asset, "side": order.side, "qty": order.qty})
+        return order
+
+    def get_positions(self) -> dict[str, float]:
+        return dict(self._positions)
+
+    def health(self) -> bool:
+        return True
+
+
 class ExecutionEngine:
     def __init__(self, broker: BaseBroker, fail_closed: bool = True) -> None:
         self.broker = broker
