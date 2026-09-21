@@ -1,7 +1,7 @@
 """Web-interface voor de tradingbot (poort 9124).
 
-Toont: code/mappen, Obsidian-noten (rendered markdown), en laat de
-demo/tests runnen. Zelfstandig met stdlib + markdown-it-py.
+Toont: code/mappen, Obsidian-noten (rendered markdown), architectuur-diagram,
+en laat de demo/tests runnen. Zelfstandig met stdlib + markdown-it-py.
 Gebruik: `uv run python -m hermes_bot.webui`  (of via systemd)
 """
 from __future__ import annotations
@@ -54,9 +54,7 @@ def _vault_notes_html() -> str:
     out: list[str] = []
     if not VAULT.is_dir():
         return '<div class="file" style="color:#f7768e">⚠ vault niet bereikbaar</div>'
-    out.append(
-        f'<div class="file" style="color:#9ece6a">● synced — {VAULT}</div>'
-    )
+    out.append(f'<div class="file" style="color:#9ece6a">● synced — {VAULT}</div>')
     for p in sorted(VAULT.iterdir()):
         if p.name.startswith("."):
             continue
@@ -76,6 +74,93 @@ def _vault_notes_html() -> str:
                 f"📝 {html.escape(p.stem)}</a></div>"
             )
     return "".join(out)
+
+
+# --- Architectuur-diagram (blokken + pijlen, zelfstandig HTML/CSS) ---
+
+ARCH_CSS = """
+.arch{display:flex;flex-direction:column;gap:10px;align-items:center;padding:10px}
+.arch-row{display:flex;gap:14px;align-items:center;justify-content:center;flex-wrap:wrap}
+.arch-block{background:#1a2030;border:1px solid #3b4a6b;border-radius:10px;padding:10px 16px;
+  min-width:120px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.arch-block h4{margin:0 0 4px;font-size:13px;color:#7aa2f7}
+.arch-block .sub{font-size:11px;color:#9ece6a;line-height:1.4}
+.arch-block .sub span{display:block}
+.arch-block.core{border-color:#7aa2f7;background:#1b2440}
+.arch-block.risk{border-color:#f7768e;background:#2a1b24}
+.arch-block.action{border-color:#9ece6a;background:#1c2a1c}
+.arch-arrow{color:#7aa2f7;font-size:20px;font-weight:700;white-space:nowrap}
+.arch-arrow.risk{color:#f7768e}
+.arch-cap{font-size:11px;color:#565f89;text-align:center;margin:6px 0 2px;letter-spacing:.5px}
+"""
+
+
+def _arch_block(title: str, subs: list[str], cls: str = "") -> str:
+    sub = "".join(f"<span>{html.escape(s)}</span>" for s in subs)
+    return f'<div class="arch-block {cls}"><h4>{html.escape(title)}</h4><div class="sub">{sub}</div></div>'
+
+
+def _architecture_html() -> str:
+    """De volledige architectuur als blokken met verbindingspijlen."""
+    return f"""
+<style>{ARCH_CSS}</style>
+<div class="arch">
+  <div class="arch-cap">LAAG 1 — DATA-INFRASTRUCTUUR</div>
+  <div class="arch-row">
+    {_arch_block("24/7 Server", ["orchestratie", "scheduler", "monitoring"])}
+    <div class="arch-arrow">▼</div>
+    {_arch_block("Gestructureerde Webscraping", ["speech", "reports", "alerts", "marktdata"])}
+  </div>
+
+  <div class="arch-cap">LAAG 2-3 — RAW INFO & MULTIMEDIA</div>
+  <div class="arch-row">
+    {_arch_block("Speech", ["audio", "video"])}
+    <div class="arch-arrow">▼</div>
+    {_arch_block("Audio/Video Analyse", ["tekst", "emotie", "pauses", "volume", "pitch", "gezicht", "lichaamstaal"])}
+    <div class="arch-arrow">▼</div>
+    {_arch_block("Reports", ["business", "overheidsuitgaven", "onafhankelijk"])}
+    <div class="arch-arrow">▼</div>
+    {_arch_block("Alerts", ["nieuwsberichten", "point loops"])}
+  </div>
+
+  <div class="arch-cap">LAAG 4 — AI-ANALYSE</div>
+  <div class="arch-row">
+    {_arch_block("AI Agent (fundamenteel)", ["concurrenten", "logistiek", "geschiedenis", "economische waarden"])}
+    <div class="arch-arrow">▼</div>
+    {_arch_block("Regionale Scores", ["veiligheid", "tevredenheid", "sociale zekerheid", "bedrijfseconomisch"])}
+  </div>
+
+  <div class="arch-cap">LAAG 5 — FUSIE</div>
+  <div class="arch-row">
+    {_arch_block("Fusion Model", ["kwaliteit", "zekerheid", "algemene emotie"], "core")}
+  </div>
+
+  <div class="arch-cap">LAAG 6 — BESLUITVORMING + RISICO</div>
+  <div class="arch-row">
+    {_arch_block("RL-Fusion Model", ["buy", "sell", "hold", "hedge", "other"], "core")}
+    <div class="arch-arrow">◄►</div>
+    {_arch_block("Monte Carlo", ["VaR95", "ES95", "crash-kans"], "risk")}
+    <div class="arch-arrow risk">▼</div>
+    {_arch_block("Risico-Engine", ["position sizing", "drawdown-guard", "stress-test", "hedging"], "risk")}
+  </div>
+
+  <div class="arch-cap">LAAG 7 — ACTIE</div>
+  <div class="arch-row">
+    {_arch_block("Output Actie", ["aandelen", "ETF's", "opties", "obligaties", "cash"], "action")}
+    <div class="arch-arrow">▼</div>
+    {_arch_block("Executie (paper/live)", ["broker-gateway", "orderrouting", "reconciliatie"], "action")}
+  </div>
+
+  <div class="arch-cap">➕ UITBREIDINGEN</div>
+  <div class="arch-row">
+    {_arch_block("B2B Bottleneck", ["supply-chain", "vraagdruk", "knelpunten"])}
+    <div class="arch-arrow">◄►</div>
+    {_arch_block("Regime-Detectie", ["bull", "bear", "highvol", "crash"])}
+    <div class="arch-arrow">◄►</div>
+    {_arch_block("Orderflow / Macro", ["COT", "optie-flow", "rente-curve", "PMI"])}
+  </div>
+</div>
+"""
 
 
 PAGE = """<!DOCTYPE html>
@@ -103,6 +188,7 @@ td,th{{border:1px solid #2a2f3a;padding:6px 10px;text-align:left}}
 <header><h1>🤖 Hermes Trading Bot</h1>
 <nav>
 <a href="/">Dashboard</a>
+<a href="/architectuur">Architectuur</a>
 <a href="/code">Code</a>
 <a href="/vault">Obsidian-noten</a>
 <a href="/run">Run demo</a>
@@ -150,7 +236,10 @@ class Handler(BaseHTTPRequestHandler):
                 "<h3>Architectuurketen</h3><pre>"
                 "data → fusie → RL → risico → executie (paper)\n"
                 "AI agent → Monte Carlo → risico-engine → output actie</pre>"
+                "<p><a href='/architectuur'>▶ Bekijk het volledige architectuur-diagram</a></p>"
             )
+        elif path == "/architectuur":
+            content = "<h2>🏗️ Architectuur</h2>" + _architecture_html()
         elif path == "/code":
             rel = qs.get("path", [""])[0]
             target = (ROOT / rel).resolve()
