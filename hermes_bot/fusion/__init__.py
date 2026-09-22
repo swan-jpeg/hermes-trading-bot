@@ -23,11 +23,16 @@ class WeightedFusion(BaseFusion):
     """Gewogen aggregatie met bronweging + onzekerheid als variance."""
 
     def __init__(self, source_weights: dict[str, float] | None = None) -> None:
+        # Weging per bron. Web/bottleneck zijn nu expliciete bronnen.
         self.weights = source_weights or {
-            "audiovisual": 0.2,
-            "agent": 0.4,
-            "regional": 0.15,
-            "market": 0.25,
+            "audiovisual": 0.15,
+            "speech": 0.15,      # speeches van CEO's/landsleiders (webscraping)
+            "report": 0.15,      # quarterly reports, overheidsuitgaven
+            "alert": 0.10,       # nieuws-alerts, point-loops
+            "regional": 0.10,    # regionale scores
+            "bottleneck": 0.10,  # B2B-vraag / supply-chain knelpunten
+            "agent": 0.15,       # fundamentele AI-agent
+            "market": 0.10,      # koersen
         }
 
     def fuse(self, inputs: list[dict]) -> FusionSignal:
@@ -62,13 +67,26 @@ class WeightedFusion(BaseFusion):
         var = float(np.var(sentiments)) if len(sentiments) > 1 else 0.0
         zekerheid = float(np.clip(1.0 - var, 0.0, 1.0))
 
+        # Per-bron gewogen gemiddelde sentiment (i.p.v. alleen laatste input).
+        source_sent: dict[str, float] = {}
+        source_w: dict[str, float] = {}
+        for i in inputs:
+            s = i["source"]
+            w = weights.get(s, 0.1) * i.get("confidence", 0.5)
+            source_sent[s] = source_sent.get(s, 0.0) + w * i.get("sentiment", 0.0)
+            source_w[s] = source_w.get(s, 0.0) + w
+        source_breakdown = {
+            s: round(source_sent[s] / source_w[s], 4) if source_w[s] else 0.0
+            for s in source_sent
+        }
+
         return FusionSignal(
             entity_id=entity,
             tijdstip=datetime.now(UTC),
             kwaliteit=round(kvaliteit, 4),
             zekerheid=round(zekerheid, 4),
             emotie={"sentiment": round(sentiment, 4), "angst": round(max(0.0, -sentiment), 4)},
-            source_breakdown={i["source"]: round(i.get("sentiment", 0.0), 4) for i in inputs},
+            source_breakdown=source_breakdown,
         )
 
 

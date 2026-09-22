@@ -55,6 +55,27 @@ class BottleneckAnalyzer:
         scored = [(n, self.bottleneck_score(n)) for n in self.graph]
         return sorted(scored, key=lambda x: -x[1])[:k]
 
+    def to_fusion_input(self, sentiment: float = 0.0) -> dict:
+        """Converteer de top-bottleneck naar een fusie-input.
+
+        Dit is de brug: bottleneck-analyse -> fusion model. De bottleneck-score
+        wordt vertaald naar een 'sentiment'-achtige richting: hoge bottleneck =
+        hoge vraagdruk = positief voor leveranciers in de keten (historisch),
+        maar ook verhoogd leveringsrisico. We gebruiken een netto richting.
+        """
+        tops = self.top_bottlenecks(1)
+        if not tops:
+            return {}
+        node, score = tops[0]
+        return {
+            "source": "bottleneck",
+            "entity_id": node,
+            "sentiment": round(score * 0.5 + sentiment * 0.5, 4),
+            "confidence": round(0.3 + 0.7 * score, 4),  # hoge score = hogere zekerheid
+            "bottleneck_score": round(score, 4),
+            "node": node,
+        }
+
     def ingest(self, reports: list[ReportSignal]) -> dict[str, float]:
         """Verwerk rapporten om vraagsignalen te halen voor bottleneck analyse.
 
@@ -85,6 +106,89 @@ class BottleneckAnalyzer:
                 scores["logistics"] = 0.6
                 
         return scores
+
+
+class BottleneckAgent:
+    """Ratet bedrijven op basis van hun positie in de bottleneck-keten.
+
+    Dit is de 'agent' die het bottleneck concept uitwerkt: uit webrapporten
+    worden vraagsignalen gehaald, gekoppeld aan supply-chain knooppunten, en
+    per bedrijf wordt een rating berekend. Die rating gaat als fusion-input
+    naar het fusion model.
+
+    entity->bottlenodes mapping: welke bottleneck-knooppunten blootstellen.
+    """
+
+    def __init__(self, analyzer: BottleneckAnalyzer | None = None) -> None:
+        self.analyzer = analyzer or BottleneckAnalyzer()
+        # Bedrijf -> relevante bottleneck-knooppunten (blootstelling).
+        self.entity_exposure: dict[str, list[str]] = {}
+        self.ratings: dict[str, float] = {}
+
+    def set_exposure(self, entity: str, nodes: list[str]) -> None:
+        self.entity_exposure[entity] = nodes
+
+    def rate_entities(self, market_sentiment: float = 0.0) -> dict[str, float]:
+        """Rating per bedrijf = gemiddelde bottleneck-score van zijn knooppunten.
+
+        Hoge rating = levert op een knelpunt (vraagdruk > capaciteit) ->
+        verhoogde omzet-potentie, maar ook leveringsrisico. De rating is
+        richtinggevend voor het fusion model.
+        """
+        ratings = {}
+        for entity, nodes in self.entity_exposure.items():
+            if not nodes:
+                ratings[entity] = 0.0
+                continue
+            scores = [self.analyzer.bottleneck_score(n) for n in nodes]
+            avg = sum(scores) / len(scores)
+            ratings[entity] = round(avg, 4)
+        self.ratings = ratings
+        return ratings
+
+    def to_fusion_inputs(self, market_sentiment: float = 0.0) -> list[dict]:
+        """Converteer per-bedrijf ratings naar fusie-inputs.
+
+        Elke input is {source: 'bottleneck', entity_id, sentiment, confidence,
+        bottleneck_score}. Dit voedt het fusion model per bedrijf.
+        """
+        self.rate_entities(market_sentiment)
+        inputs = []
+        for entity, rating in self.ratings.items():
+            if rating <= 0:
+                continue
+            inputs.append({
+                "source": "bottleneck",
+                "entity_id": entity,
+                "sentiment": round(rating * 0.5 + market_sentiment * 0.5, 4),
+                "confidence": round(0.3 + 0.7 * rating, 4),
+                "bottleneck_score": round(rating, 4),
+                "node": self.entity_exposure.get(entity, [""])[0],
+            })
+        return inputs
+
+    def run_pipeline(
+        self,
+        reports: list[dict],
+        entity_map: dict[str, list[str]],
+        market_sentiment: float = 0.0,
+    ) -> list[dict]:
+        """Volledige keten: reports -> bottleneck-analyse -> bedrijfs-ratings -> fusie-input.
+
+        reports: ruwe webitems {headline, body}.
+        entity_map: {bedrijf: [bottleneck-nodes]}.
+        """
+        # 1. Bouw de supply-chain graaf uit rapporten (vraagsignalen).
+        for r in reports:
+            text = f"{r.get('headline', '')} {r.get('body', '')}".lower()
+            for node in ["semiconductor", "actuators", "power", "logistics"]:
+                if node in text:
+                    self.analyzer.add_node(node, demand=0.8, capacity=0.4, players=3)
+        # 2. Koppel bedrijven aan knooppunten.
+        for entity, nodes in entity_map.items():
+            self.set_exposure(entity, nodes)
+        # 3. Ratings -> fusie-inputs.
+        return self.to_fusion_inputs(market_sentiment)
 
 
 class RegimeDetector:

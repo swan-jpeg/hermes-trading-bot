@@ -20,8 +20,24 @@ data:
   storage: postgres       # postgres | sqlite (dev)
   sqlite_path: var/tradingbot.db
 
+# Webscraping routes voor de 24/7 server.
+# Zet enabled: true om constant naar het web te kijken (speeches, reports, alerts).
+# server is te zwak om de zware modellen (whisper/DeepFace) te draaien -> offline.
+webscraping:
+  enabled: false          # MASTER-knop: zet op true om alle routes aan te zetten
+  routes:
+    speech:
+      enabled: false      # speeches van CEO's/landsleiders (RSS nieuws)
+      interval_sec: 3600  # elk uur
+    reports:
+      enabled: false      # quarterly reports + overheidsuitgaven
+      interval_sec: 86400 # dagelijks
+    alerts:
+      enabled: false      # nieuws-alerts + point-loops
+      interval_sec: 600   # elke 10 min
+
 fusion:
-  sources: [audiovisual, agent, regional, market]
+  sources: [audiovisual, speech, report, alert, regional, bottleneck, agent, market]
   weigh_by_credibility: true
 
 risk:
