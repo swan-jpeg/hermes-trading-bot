@@ -524,6 +524,185 @@ def _backtest_result_html(data: dict) -> str:
 """
 
 
+def _control_panel_html() -> str:
+    """Backtest Control Panel — configuratie/experiment-laag bovenop de v2.1-engine."""
+    return """
+<h2>🎛️ Backtest Control Panel</h2>
+<p>Een dunne experimenteerknop bovenop de bestaande backtester. Stel inputs in,
+draai één backtest of vergelijk 2–5 configuraties — de engine zelf wordt niet gewijzigd.</p>
+
+<div class="card">
+  <h3>Configuratie</h3>
+  <form id="cp-form" class="form-row" style="align-items:stretch;flex-direction:column;gap:12px">
+    <div class="form-row">
+      <label style="font-size:14px;color:var(--muted)">Run type
+        <select id="cp-rule" name="rule" onchange="cpToggleMode()">
+          <option value="single" selected>Eén backtest</option>
+          <option value="compare">Vergelijk (2–5 configs)</option>
+        </select></label>
+      <label style="font-size:14px;color:var(--muted)">Asset
+        <select name="asset" id="cp-asset" list="syms"><option value="SPY">SPY</option>
+          <option>QQQ</option><option>IWM</option><option>AAPL</option><option>MSFT</option>
+          <option>NVDA</option><option>EFA</option><option>AGG</option></select></label>
+      <label style="font-size:14px;color:var(--muted)">Jaren
+        <input name="years" value="3" type="number" step="0.5" min="0.5" style="width:90px"></label>
+      <label style="font-size:14px;color:var(--muted)">Vol-target
+        <input name="vol" value="0.125" type="number" step="0.025" min="0.02" max="0.5" style="width:96px"></label>
+      <label style="font-size:14px;color:var(--muted)">Kosten
+        <select name="costs"><option value="1">AN</option><option value="0">UIT</option></select></label>
+    </div>
+    <div class="form-row" style="font-size:13px;color:var(--muted);gap:16px">
+      <label><input type="checkbox" name="opp" checked> Opportunity Score</label>
+      <label><input type="checkbox" name="recovery" checked> Recovery Engine</label>
+      <label><input type="checkbox" name="brake" checked> Emergency Brake</label>
+      <label><input type="checkbox" name="risk" checked> Risk Engine</label>
+    </div>
+    <div id="cp-compare" style="display:none">
+      <h3 style="margin-top:4px">Configuraties om te vergelijken</h3>
+      <div id="cp-rows"></div>
+      <div class="form-row">
+        <button type="button" class="secondary" onclick="cpAddRow()">+ Voeg config toe</button>
+      </div>
+    </div>
+    <div class="form-row">
+      <button type="submit">▶ Draai backtest</button>
+      <button type="button" class="secondary" onclick="cpQuick()">⚡ Quick: vol-targets</button>
+      <button type="button" class="secondary" onclick="cpQuickFull()">⚡ Full vs componenten</button>
+    </div>
+  </form>
+</div>
+<div id="cp-result" aria-live="polite"></div>
+
+<script>
+let cpRowCount = 0;
+const CP_ASSETS = ['SPY','QQQ','IWM','AAPL','MSFT','NVDA','EFA','AGG'];
+function cpAddRow(label, asset, vol){
+  cpRowCount++;
+  const d = document.createElement('div');
+  d.className='form-row'; d.id='cp-row-'+cpRowCount;
+  const opts = CP_ASSETS.map(a=>'<option '+(a===(asset||'SPY')?'selected':'')+'>'+a+'</option>').join('');
+  d.innerHTML =
+    '<label style="font-size:13px;color:var(--muted)">&nbsp;Label <input name="rlabel" value="'+(label||('Config '+cpRowCount))+'" style="width:130px"></label>'+
+    '<select name="rasset">'+opts+'</select>'+
+    '<input name="rvol" value="'+(vol||'0.125')+'" type="number" step="0.025" min="0.02" max="0.5" style="width:90px">'+
+    '<button type="button" class="secondary" style="padding:6px 12px" onclick="this.closest(\'.form-row\').remove()">✕</button>';
+  document.getElementById('cp-rows').appendChild(d);
+}
+function cpToggleMode(){
+  const c = document.getElementById('cp-rule').value==='compare';
+  document.getElementById('cp-compare').style.display = c ? 'block' : 'none';
+  document.getElementById('cp-asset').disabled = c;
+  if(c && cpRowCount===0){ cpAddRow('A','SPY','0.10'); cpAddRow('B','SPY','0.15'); cpAddRow('C','SPY','0.20'); }
+}
+function cpQuick(){
+  ['0.10','0.15','0.20'].forEach(v=>cpAddRow('vol '+v,'SPY',v));
+  document.getElementById('cp-rule').value='compare'; cpToggleMode();
+}
+function cpQuickFull(){
+  // Reset en bouw 'full vs componenten' (elk alleen de bestaande toggle verschilt).
+  document.getElementById('cp-rows').innerHTML=''; cpRowCount=0;
+  cpAddRow('Full v2.1','SPY','0.125');
+  document.getElementById('cp-rule').value='compare'; cpToggleMode();
+}
+
+document.getElementById('cp-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const el = document.getElementById('cp-result');
+  el.innerHTML = '<p><span class="spin"></span> Backtesting op de server… (kan enkele seconden duren)</p>';
+  const rule = f.rule.value;
+  const body = {
+    rule,
+    years: f.years.value || '3',
+    vol: f.vol.value || '0.125',
+    costs: f.costs.value === '1',
+    opp: f.opp.checked, recovery: f.recovery.checked,
+    brake: f.brake.checked, risk: f.risk.checked,
+  };
+  if(rule==='compare'){
+    body.rows = Array.from(document.querySelectorAll('#cp-rows .form-row')).map(r => ({
+      label: r.querySelector('[name=rlabel]').value,
+      asset: r.querySelector('[name=rasset]').value,
+      vol: r.querySelector('[name=rvol]').value,
+    }));
+  } else {
+    body.asset = f.asset.value;
+  }
+  try {
+    const r = await fetch('/control_panel', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+    });
+    const text = await r.text();
+    if(!r.ok) throw new Error(text);
+    el.innerHTML = text;
+  } catch(err){
+    el.innerHTML = '<div class="card"><p style="color:var(--danger)">Fout: ' + String(err).replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])) + '</p></div>';
+  }
+});
+</script>
+"""
+
+
+def _run_control_panel_(body: dict) -> str:
+    """Server-kant: verwerk de Control Panel JSON-request naar HTML.
+
+    Bouwt BacktestConfig(s) uit de form-invoer en roept de bestaande v2.1-engine.
+    """
+    from hermes_bot.control_panel import (
+        BacktestConfig,
+        compare_to_html,
+        overview_html,
+        run_backtest,
+        run_compare,
+        save_run,
+    )
+
+    rule = body.get("rule", "single")
+    years = float(body.get("years", "3"))
+    vol = float(body.get("vol", "0.125"))
+    base = dict(
+        years=years, transaction_costs=body.get("costs", True),
+        opportunity=body.get("opp", True), recovery=body.get("recovery", True),
+        emergency_brake=body.get("brake", True), risk_engine=body.get("risk", True),
+    )
+    if rule == "compare":
+        rows = body.get("rows") or []
+        if not 2 <= len(rows) <= 5:
+            return '<div class="card"><p style="color:var(--danger)">Kies 2–5 configuraties.</p></div>'
+        cfgs = [BacktestConfig(asset=r["asset"], vol_target=float(r["vol"]),
+                               label=r["label"], run_type="compare", **base) for r in rows]
+        data = run_compare(cfgs)
+        out = compare_to_html(data)
+        try:
+            save_run(data)
+        except Exception:  # noqa: BLE001
+            pass
+        return out
+    asset = body.get("asset", "SPY")
+    cfg = BacktestConfig(asset=asset, vol_target=vol, **base)
+    data = run_backtest(cfg, return_log=True)
+    # Compact overzicht + equity/drawdown/exposure + risk/opp.
+    parts = [overview_html(data)]
+    from hermes_bot.control_panel import (
+        drawdown_chart,
+        equity_chart,
+        exposure_chart,
+        risk_opportunity_chart,
+    )
+    parts.append("<div class='card'><h3>Equity-curve</h3>"
+                 + equity_chart(data, data.get("prices")) + "</div>")
+    parts.append("<div class='card'><h3>Drawdown</h3>" + drawdown_chart(data) + "</div>")
+    parts.append("<div class='card'><h3>Exposure</h3>" + exposure_chart(data) + "</div>")
+    parts.append("<div class='card'><h3>Risk / Opportunity vs Exposure</h3>" +
+                 risk_opportunity_chart(data) + "</div>")
+    parts.append(f"<p class='muted'>Run: {data['run_id']}</p>")
+    try:
+        save_run(data)
+    except Exception:  # noqa: BLE001
+        pass
+    return "\n".join(parts)
+
+
 def _download_html() -> str:
     return """
 <h2>⬇️ Download &amp; GitHub-export</h2>
@@ -568,6 +747,7 @@ def _code_view_html(rel: str, content: str) -> str:
 def _page(title: str, content: str, active: str = "") -> str:
     nav_links = [
         ("/", "Dashboard", "Dash"),
+        ("/panel", "Panel", "Panel"),
         ("/backtest", "Backtest", "Backtest"),
         ("/download", "Download", "Download"),
         ("/architectuur", "Architectuur", "Architectuur"),
@@ -634,6 +814,8 @@ class Handler(BaseHTTPRequestHandler):
                 "• <a href='/run'>Draai de demo-pipeline</a>.</p></div>"
             )
             self._send(self._page("Dashboard", content, "Dash"))
+        elif path == "/panel":
+            self._send(self._page("Backtest Control Panel", _control_panel_html(), "Panel"))
         elif path == "/backtest":
             self._send(self._page("Backtest", _backtest_html(), "Backtest"))
         elif path == "/download":
@@ -703,6 +885,17 @@ class Handler(BaseHTTPRequestHandler):
             self._send(self._page("404", content))
 
     def do_POST(self) -> None:  # noqa: N802
+        if self.path == "/control_panel":
+            import json
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                raw = self.rfile.read(length) if length else b"{}"
+                body = json.loads(raw or b"{}")
+                out = _run_control_panel_(body)
+                self._send(out)
+            except Exception as e:  # noqa: BLE001
+                self._send(f'<div class="card"><p style="color:var(--danger)">Fout: {html.escape(str(e))}</p></div>')
+            return
         if self.path == "/run":
             try:
                 r = subprocess.run(
