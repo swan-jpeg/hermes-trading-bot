@@ -158,6 +158,31 @@ th { color: var(--muted); font-weight: 600; font-size: 12px; letter-spacing: .02
 .code-layout { display: grid; grid-template-columns: 300px 1fr; gap: 20px; align-items: start; }
 @media (max-width: 820px) { .code-layout { grid-template-columns: 1fr; } }
 
+/* Architectuur modal (klikbaar component) */
+.arch-node { cursor: pointer; }
+.arch-node:focus { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 16px; }
+.arch-modal { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center;
+  justify-content: center; background: rgba(0,0,0,.35); backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px); opacity: 0; pointer-events: none;
+  transition: opacity .25s ease; padding: 20px; }
+.arch-modal.open { opacity: 1; pointer-events: auto; }
+.arch-modal-card { background: var(--card); border-radius: 20px; box-shadow: var(--shadow);
+  max-width: 460px; width: 100%; padding: 24px 26px; position: relative;
+  transform: translateY(12px) scale(.97); transition: transform .3s cubic-bezier(.2,.8,.2,1); }
+.arch-modal.open .arch-modal-card { transform: translateY(0) scale(1); }
+.arch-modal-close { position: absolute; top: 14px; right: 14px; background: none; color: var(--muted);
+  font-size: 18px; padding: 6px 10px; border-radius: 999px; }
+.arch-modal-close:hover { background: color-mix(in srgb, var(--text) 10%, transparent); box-shadow: none; }
+.arch-modal-title { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 6px; }
+.arch-modal-rol { font-size: 14px; color: var(--accent); font-weight: 600; margin: 0 0 10px; }
+.arch-modal-wat { font-size: 14px; color: var(--text); line-height: 1.55; margin: 0 0 16px; }
+.arch-modal-flow { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid
+  color-mix(in srgb, var(--text) 10%, transparent); padding-top: 14px; }
+.arch-modal-flow > div { display: flex; gap: 10px; font-size: 13px; }
+.arch-modal-flow .lbl { flex: 0 0 44px; color: var(--muted); font-weight: 600; text-transform: uppercase;
+  font-size: 11px; letter-spacing: .04em; padding-top: 1px; }
+.arch-modal-flow span:last-child { color: var(--text); }
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .card, nav a, button, .arch-block, header { transition: none !important; }
@@ -326,9 +351,10 @@ ARCH_SVG = """<svg id="arch" viewBox="0 0 1000 860" style="width:100%;height:aut
 def _node(id, x, y, w, h, title, subs, cls="", grad="gData"):
     fill = {"gData": "url(#gData)", "gCore": "url(#gCore)", "gRisk": "url(#gRisk)"}[grad]
     sub_lines = "".join(f'<tspan x="{x+w/2}" dy="{1 if i else 0}em">{html.escape(s)}</tspan>'
-                         for i, s in enumerate(subs))
+                        for i, s in enumerate(subs))
     return (
-        f'<g class="arch-node {cls}" id="{id}">'
+        f'<g class="arch-node {cls}" id="{id}" role="button" tabindex="0" '
+        f'onclick="archInfo(\'{id}\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \')archInfo(\'{id}\')">'
         f'<rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{fill}"/>'
         f'<text x="{x+w/2}" y="{y+h/2-4}" text-anchor="middle" class="t">{html.escape(title)}</text>'
         f'<text x="{x+w/2}" y="{y+h/2+12}" text-anchor="middle" class="s">{sub_lines}</text>'
@@ -339,6 +365,188 @@ def _node(id, x, y, w, h, title, subs, cls="", grad="gData"):
 def _edge(x1, y1, x2, y2, cx=0.5, cy=0.35):
     """Bezier-curve van onderkant node1 naar bovenkant node2 (met echte pijl)."""
     return f"M {x1} {y1} C {x1} {y1+(y2-y1)*cy}, {x2} {y2-(y2-y1)*cy}, {x2} {y2}"
+
+
+# --- Uitleg per component (voor de klikbare modal) ---
+COMPONENT_INFO = {
+    "server": {
+        "titel": "24/7 Server",
+        "rol": "De centrale infrastructuur die alles draait.",
+        "wat": "Een altijd-aan server die de webscraping, de AI-agenten, de "
+               "risico-engine en de executie orchestreert. Plant taken in via een "
+               "scheduler en houdt de hele keten draaiend.",
+        "in": "— (startpunt)",
+        "uit": "gestructureerde webscraping · scheduling",
+        "code": "hermes_bot/pipeline.py",
+    },
+    "scrape": {
+        "titel": "Gestructureerde Webscraping",
+        "rol": "Haalt ruwe informatie van het web.",
+        "wat": "Scrapet live speeches van CEO's en landsleiders, bedrijfsrapporten, "
+               "overheidsuitgaven, nieuwsberichten en marktdata. Structureert dit "
+               "naar bruikbare signalen voor de rest van de keten.",
+        "in": "24/7 server · web-bronnen",
+        "uit": "speech · reports · alerts · marktdata",
+        "code": "hermes_bot/data/scraper.py",
+    },
+    "speech": {
+        "titel": "Speech (audio + video)",
+        "rol": "Analyseert toespraken van CEO's en landsleiders.",
+        "wat": "Splitst spraak op in audio en video. Audio levert tekst (transcriptie), "
+               "emotie, pauzes, volume en pitch. Video levert gezichtsuitdrukking, "
+               "bewegingen en lichaamstaal. Gebruikt opensource-modellen "
+               "(faster-whisper, DeepFace, MediaPipe, openSMILE).",
+        "in": "webscraping → speech",
+        "uit": "tekst · emotie · prosodie · publiek → fusion",
+        "code": "hermes_bot/signals/audio.py · video.py",
+    },
+    "reports": {
+        "titel": "Reports & Alerts",
+        "rol": "Verwerkt bedrijfs- en overheidsrapporten.",
+        "wat": "Leest kwartaalcijfers, overheidsuitgaven en onafhankelijke rapportage. "
+               "Een AI-agent destilleert koersveranderingen en staatsinvesteringen "
+               "hieruit als input voor het fusion-model.",
+        "in": "webscraping → reports",
+        "uit": "koersveranderingen · staatsinvesteringen → fusion",
+        "code": "hermes_bot/signals/textual.py",
+    },
+    "alerts": {
+        "titel": "Nieuws & Point-loops",
+        "rol": "Vangt nieuwsberichten en alerts op.",
+        "wat": "Monitort nieuwsfeeds en point-loops (herhaalde datapunten) voor "
+               "actuele gebeurtenissen die de markt kunnen raken.",
+        "in": "webscraping → alerts",
+        "uit": "nieuws-signalen → fusion",
+        "code": "hermes_bot/data/scraper.py",
+    },
+    "bottleneck": {
+        "titel": "B2B Bottleneck",
+        "rol": "Rangschikt bedrijven op knelpunten in de toeleveringsketen.",
+        "wat": "Een agent beoordeelt welke bedrijven in een 'bottleneck' zitten "
+               "(vraag > aanbod, supply-chain-knelpunten) en geeft een rating "
+               "door aan het fusion-model als extra signaal.",
+        "in": "webscraping → reports",
+        "uit": "bottleneck-ratings → fusion",
+        "code": "hermes_bot/expansions/__init__.py",
+    },
+    "regional": {
+        "titel": "Regionale Scores",
+        "rol": "Scoort regio's op veiligheid, tevredenheid en economie.",
+        "wat": "Berekent per regio scores voor veiligheid, tevredenheid, sociale "
+               "zekerheid en bedrijfseconomische veranderingen. Deze context helpt "
+               "het fusion-model om regionale risico's mee te wegen.",
+        "in": "webscraping → reports",
+        "uit": "regionale scores → fusion",
+        "code": "hermes_bot/expansions/__init__.py",
+    },
+    "regime": {
+        "titel": "Regime / Orderflow",
+        "rol": "Bepaalt de markttoestand (bull, crash, herstel).",
+        "wat": "Detecteert het marktregime (normal, elevated, stressed, crash, "
+               "recovery) en volgt orderflow/positionering (bv. COT). Dit is een "
+               "belangrijke input voor de risico-engine.",
+        "in": "marktdata · orderflow",
+        "uit": "regime-label → fusion + risico-engine",
+        "code": "hermes_bot/expansions/__init__.py",
+    },
+    "fusion": {
+        "titel": "Fusion Model",
+        "rol": "Combineert alle signalen tot één beslissing.",
+        "wat": "Weegt alle inputs (speech, reports, alerts, bottleneck, regionale "
+               "scores, regime) samen tot een kwaliteitsscore, zekerheid en emotie. "
+               "Dit is de 'wat te kopen'-laag van de architectuur.",
+        "in": "alle signalen + uitbreidingen",
+        "uit": "kwaliteit · zekerheid · emotie → RL-fusion",
+        "code": "hermes_bot/fusion/__init__.py",
+    },
+    "rl": {
+        "titel": "RL-Fusion Model",
+        "rol": "Stelt posities voor (buy/sell/hold/hedge).",
+        "wat": "Neemt de fusion-output en stelt een gewenste positie voor. De "
+               "risico-engine keurt dit goed of bij — RL stelt voor, Risk beslist.",
+        "in": "fusion-output",
+        "uit": "voorgestelde positie → risico-engine",
+        "code": "hermes_bot/agents/rl/__init__.py",
+    },
+    "mc": {
+        "titel": "Monte Carlo",
+        "rol": "Simuleert duizenden marktpaden voor risico.",
+        "wat": "Bootst per-dag marktpaden om VaR95, Expected Shortfall (ES95) en "
+               "crash-kans te schatten. Dit voedt de risico-engine met "
+               "staartrisico-informatie.",
+        "in": "historische returns",
+        "uit": "VaR95 · ES95 · crash-kans → risico-engine",
+        "code": "hermes_bot/risk_v2/montecarlo.py",
+    },
+    "risk": {
+        "titel": "Risk Engine v2.1",
+        "rol": "Bepaalt hoeveel risico we mogen nemen.",
+        "wat": "De adaptieve risico-engine met drie lagen: Strategic (regime), "
+               "Tactical (vol/drawdown/correlatie) en Emergency Brake (flash-crash). "
+               "Een recovery-engine bouwt exposure weer op na herstel. Dit is de "
+               "'hoeveel risico'-laag.",
+        "in": "RL-voorstel · Monte Carlo · regime",
+        "uit": "risk-budget / exposure → output-actie",
+        "code": "hermes_bot/risk_v2_1/__init__.py",
+    },
+    "action": {
+        "titel": "Output Actie",
+        "rol": "Zet het risicobudget om in een concrete portefeuille.",
+        "wat": "Verdeelt het goedgekeurde risicobudget over aandelen, ETF's, "
+               "obligaties en cash. Bepaalt de uiteindelijke posities.",
+        "in": "risk-budget · RL-voorstel",
+        "uit": "posities → executie",
+        "code": "hermes_bot/portfolio/__init__.py",
+    },
+    "exec": {
+        "titel": "Executie",
+        "rol": "Voert de posities daadwerkelijk uit.",
+        "wat": "Plaatst orders via een paper-broker (fail-closed: bij twijfel geen "
+               "order) of een live-broker. Logt elke transactie.",
+        "in": "posities van output-actie",
+        "uit": "orders · transactielog",
+        "code": "hermes_bot/execution/__init__.py",
+    },
+}
+
+
+def _arch_modal_html() -> str:
+    """Kleine modal (niet fullscreen) met uitleg over een component."""
+    return """
+<div id="arch-modal" class="arch-modal" role="dialog" aria-modal="true" aria-hidden="true"
+     onclick="if(event.target===this)archClose()">
+  <div class="arch-modal-card">
+    <button class="arch-modal-close" onclick="archClose()" aria-label="Sluiten">✕</button>
+    <div id="arch-modal-body"></div>
+  </div>
+</div>
+<script>
+const ARCH_INFO = __ARCH_INFO__;
+function archInfo(id){
+  const info = ARCH_INFO[id];
+  if(!info) return;
+  const body = document.getElementById('arch-modal-body');
+  body.innerHTML =
+    '<h3 class="arch-modal-title">' + info.titel + '</h3>' +
+    '<p class="arch-modal-rol">' + info.rol + '</p>' +
+    '<p class="arch-modal-wat">' + info.wat + '</p>' +
+    '<div class="arch-modal-flow">' +
+      '<div><span class="lbl">In</span><span>' + info.in + '</span></div>' +
+      '<div><span class="lbl">Uit</span><span>' + info.uit + '</span></div>' +
+      '<div><span class="lbl">Code</span><span>' + info.code + '</span></div>' +
+    '</div>';
+  const m = document.getElementById('arch-modal');
+  m.classList.add('open');
+  m.setAttribute('aria-hidden','false');
+}
+function archClose(){
+  const m = document.getElementById('arch-modal');
+  m.classList.remove('open');
+  m.setAttribute('aria-hidden','true');
+}
+document.addEventListener('keydown', e => { if(e.key==='Escape') archClose(); });
+</script>
+"""
 
 
 def _architecture_html() -> str:
@@ -406,7 +614,12 @@ def _architecture_html() -> str:
     out = ARCH_SVG
     for token, val in repl.items():
         out = out.replace("{" + token + "}", str(val))
-    return out
+    # Modal met uitleg per component (klikbaar).
+    import json as _json
+    modal = _arch_modal_html().replace(
+        "__ARCH_INFO__", _json.dumps(COMPONENT_INFO, ensure_ascii=False)
+    )
+    return out + modal
 
 
 def _backtest_html() -> str:
