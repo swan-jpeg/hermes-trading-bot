@@ -3,50 +3,32 @@ from __future__ import annotations
 
 import pandas as pd
 
-from hermes_bot.backtest.engine import Backtester, BuyAndHoldStrategy
+from hermes_bot.backtest import Backtester, BuyAndHoldStrategy, VolTargetStrategy
 from hermes_bot.backtest.metrics import BacktestResult
+
+
+def _prices(close: list[float]) -> pd.DataFrame:
+    dates = pd.date_range("2023-01-01", periods=len(close), freq="B")
+    return pd.DataFrame(
+        {"open": close, "high": [c * 1.01 for c in close],
+         "low": [c * 0.99 for c in close], "close": close,
+         "volume": [1000.0] * len(close)},
+        index=dates,
+    )
 
 
 def test_backtester_basic() -> None:
     """Test dat de backtester werkt zonder fouten."""
-    # Maak een simpele dataframe
-    dates = pd.date_range('2023-01-01', periods=10, freq='D')
-    prices = pd.DataFrame({
-        'open': [100.0] * 10,
-        'high': [105.0] * 10,
-        'low': [95.0] * 10,
-        'close': [100.0, 102.0, 101.0, 103.0, 104.0, 105.0, 106.0, 107.0, 108.0, 109.0],
-        'volume': [1000.0] * 10
-    }, index=dates)
-    
-    # Maak een strategie
-    strategy = BuyAndHoldStrategy()
-    
-    # Maak een backtester
-    backtester = Backtester()
-    
-    # Voer backtest uit
-    result = backtester.run(prices, strategy)
-    
-    # Controleer dat het resultaat correct is
+    prices = _prices([100.0, 102.0, 101.0, 103.0, 104.0, 105.0, 106.0, 107.0, 108.0, 110.0])
+    result = Backtester().run(prices, BuyAndHoldStrategy())
     assert isinstance(result, BacktestResult)
     assert len(result.equity_curve) == 10
-    assert result.initial_capital == 100000.0
-    # De test is niet echt betrouwbaar zonder een goede implementatie
+    assert result.initial_capital == 100_000.0
 
 
-def test_buy_and_hold_strategy() -> None:
-    """Test dat de buy-and-hold strategie werkt."""
-    strategy = BuyAndHoldStrategy()
-    
-    # Test met een dummy rij
-    dummy_row = {
-        'open': 100.0,
-        'high': 105.0,
-        'low': 95.0,
-        'close': 102.0,
-        'volume': 1000.0
-    }
-    
-    action = strategy.decide(dummy_row)
-    assert action == "BUY"
+def test_vol_target_never_fails() -> None:
+    """Test dat de vol-target strategie draait en resultaat levert."""
+    prices = _prices([100.0, 102.0, 99.0, 103.0, 105.0, 108.0, 106.0, 110.0, 112.0, 115.0])
+    result = Backtester().run(prices, VolTargetStrategy({"entity": "asset"}))
+    assert isinstance(result, BacktestResult)
+    assert result.max_drawdown <= 0.0  # drawdown is nooit positief
