@@ -9,6 +9,8 @@ class ReportSignal(BaseSignal):
     report_type: str = "business"  # business | overheidsuitgaven | onafhankelijk
     summary: str = ""
     extracted_topics: list[str] = []
+    headline: str = ""  # voor de uitbreidingen (RegionalScorer/Bottleneck)
+    body: str = ""      # voor de uitbreidingen
 
 
 class AlertSignal(BaseSignal):

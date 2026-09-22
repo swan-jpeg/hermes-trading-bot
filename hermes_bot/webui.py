@@ -229,57 +229,184 @@ def _vault_notes_html() -> str:
 
 def _arch_block(title: str, subs: list[str], cls: str = "") -> str:
     sub = "".join(f"<span>{html.escape(s)}</span>" for s in subs)
-    return f'<div class="arch-block {cls}"><h4>{html.escape(title)}</h4><div class="sub">{sub}</div></div>'
+    return f"<div class='arch-block {{cls}}'><h4>{html.escape(title)}</h4><div class='sub'>{sub}</div></div>"
+
+
+# --- Architectuur: SVG-flow-diagram met echte bezier-pijlen (Apple design) ---
+ARCH_SVG = """<svg id="arch" viewBox="0 0 1000 860" style="width:100%;height:auto" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="gCore" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0a84ff"/><stop offset="100%" stop-color="#30d158"/>
+    </linearGradient>
+    <linearGradient id="gRisk" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ff375f"/><stop offset="100%" stop-color="#ff9f0a"/>
+    </linearGradient>
+    <linearGradient id="gData" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#5e5ce6"/><stop offset="100%" stop-color="#bf5af2"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#0a84ff"/>
+    </marker>
+    <marker id="arrowRisk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ff375f"/>
+    </marker>
+    <marker id="arrowData" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5e5ce6"/>
+    </marker>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <style>
+  .arch-node rect{filter:url(#shadow);rx:16;transition:transform .25s cubic-bezier(.2,.8,.2,1)}
+  .arch-node:hover rect{transform:translateY(-2px)}
+  .arch-node .t{font:600 13px -apple-system,system-ui,sans-serif;fill:#1d1d1f}
+  .arch-node .s{font:11px -apple-system,system-ui,sans-serif;fill:#6e6e73}
+  .arch-node.core .t{fill:#fff}
+  .arch-node.core .s{fill:rgba(255,255,255,.85)}
+  .arch-node.risk .t{fill:#fff}
+  .arch-node.risk .s{fill:rgba(255,255,255,.85)}
+  .arch-node.data .t{fill:#fff}
+  .arch-node.data .s{fill:rgba(255,255,255,.85)}
+  .arch-edge{fill:none;stroke:#0a84ff;stroke-width:2.5;opacity:.85}
+  .arch-edge.risk{stroke:#ff375f}
+  .arch-edge.data{stroke:#5e5ce6}
+  .arch-edge.ghost{stroke:#c7c7cc;stroke-dasharray:5 4;opacity:.6}
+  .arch-label{font:11px -apple-system,system-ui,sans-serif;fill:#6e6e73}
+  .arch-cap{font:600 11px -apple-system,system-ui,sans-serif;fill:#86868b;letter-spacing:.08em}
+  </style>
+
+  <!-- ===== Laag 1 — DATA ===== -->
+  <g class="arch-cap"><text x="30" y="30">LAAG 1 · DATA</text></g>
+  {n_server}{n_scrape}
+
+  <!-- ===== Laag 2 — SIGNALEN / UITBREIDINGEN ===== -->
+  <g class="arch-cap"><text x="30" y="180">LAAG 2 · SIGNALEN</text></g>
+  {n_speech}{n_reports}{n_alerts}
+  {n_bottleneck}{n_regional}{n_regime}
+
+  <!-- ===== Laag 3 — FUSIE ===== -->
+  <g class="arch-cap"><text x="30" y="360">LAAG 3 · FUSIE</text></g>
+  {n_fusion}
+
+  <!-- ===== Laag 4 — BESLUIT + RISICO ===== -->
+  <g class="arch-cap"><text x="30" y="520">LAAG 4 · BESLUIT + RISICO</text></g>
+  {n_rl}{n_mc}{n_risk}
+
+  <!-- ===== Laag 5 — ACTIE ===== -->
+  <g class="arch-cap"><text x="30" y="700">LAAG 5 · ACTIE</text></g>
+  {n_action}{n_exec}
+
+  <!-- ===== EDGES (pijlen tussen genodeerde centra) ===== -->
+  <!-- server -> scrape -->
+  <path class="arch-edge data" d="{e_server_scrape}" marker-end="url(#arrowData)"/>
+  <!-- scrape -> signalen -->
+  <path class="arch-edge data" d="{e_scrape_speech}" marker-end="url(#arrowData)"/>
+  <path class="arch-edge data" d="{e_scrape_reports}" marker-end="url(#arrowData)"/>
+  <path class="arch-edge data" d="{e_scrape_alerts}" marker-end="url(#arrowData)"/>
+  <!-- signalen -> fusion (uitbreidingen GENTEGREERD) -->
+  <path class="arch-edge" d="{e_speech_fusion}" marker-end="url(#arrow)"/>
+  <path class="arch-edge" d="{e_reports_fusion}" marker-end="url(#arrow)"/>
+  <path class="arch-edge ghost" d="{e_alerts_fusion}" marker-end="url(#arrow)"/>
+  <path class="arch-edge" d="{e_bottleneck_fusion}" marker-end="url(#arrow)"/>
+  <path class="arch-edge" d="{e_regional_fusion}" marker-end="url(#arrow)"/>
+  <path class="arch-edge" d="{e_regime_fusion}" marker-end="url(#arrow)"/>
+  <!-- fusion -> rl -->
+  <path class="arch-edge" d="{e_fusion_rl}" marker-end="url(#arrow)"/>
+  <!-- rl / mc -> risk -->
+  <path class="arch-edge" d="{e_rl_risk}" marker-end="url(#arrow)"/>
+  <path class="arch-edge risk" d="{e_mc_risk}" marker-end="url(#arrowRisk)"/>
+  <!-- risk -> actie -->
+  <path class="arch-edge risk" d="{e_risk_action}" marker-end="url(#arrowRisk)"/>
+  <path class="arch-edge" d="{e_action_exec}" marker-end="url(#arrow)"/>
+</svg>"""
+
+
+def _node(id, x, y, w, h, title, subs, cls="", grad="gData"):
+    fill = {"gData": "url(#gData)", "gCore": "url(#gCore)", "gRisk": "url(#gRisk)"}[grad]
+    sub_lines = "".join(f'<tspan x="{x+w/2}" dy="{1 if i else 0}em">{html.escape(s)}</tspan>'
+                         for i, s in enumerate(subs))
+    return (
+        f'<g class="arch-node {cls}" id="{id}">'
+        f'<rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{fill}"/>'
+        f'<text x="{x+w/2}" y="{y+h/2-4}" text-anchor="middle" class="t">{html.escape(title)}</text>'
+        f'<text x="{x+w/2}" y="{y+h/2+12}" text-anchor="middle" class="s">{sub_lines}</text>'
+        f'</g>'
+    )
+
+
+def _edge(x1, y1, x2, y2, cx=0.5, cy=0.35):
+    """Bezier-curve van onderkant node1 naar bovenkant node2 (met echte pijl)."""
+    return f"M {x1} {y1} C {x1} {y1+(y2-y1)*cy}, {x2} {y2-(y2-y1)*cy}, {x2} {y2}"
 
 
 def _architecture_html() -> str:
-    return """
-<div class="arch">
-  <div class="arch-cap">Laag 1 — Data-infrastructuur</div>
-  <div class="arch-row">
-    {b1}<div class="arch-arrow">▼</div>{b2}
-  </div>
-  <div class="arch-cap">Laag 2-3 — Raw info &amp; multimedia</div>
-  <div class="arch-row">
-    {b3}<div class="arch-arrow">▼</div>{b4}<div class="arch-arrow">◄►</div>{b5}
-  </div>
-  <div class="arch-cap">Laag 4 — AI-analyse</div>
-  <div class="arch-row">
-    {b6}<div class="arch-arrow">▼</div>{b7}
-  </div>
-  <div class="arch-cap">Laag 5 — Fusie</div>
-  <div class="arch-row">{b8}</div>
-  <div class="arch-cap">Laag 6 — Besluitvorming + risico</div>
-  <div class="arch-row">
-    {b9}<div class="arch-arrow">◄►</div>{b10}<div class="arch-arrow risk">▼</div>{b11}
-  </div>
-  <div class="arch-cap">Laag 7 — Actie</div>
-  <div class="arch-row">
-    {b12}<div class="arch-arrow">▼</div>{b13}
-  </div>
-  <div class="arch-cap">➕ Uitbreidingen</div>
-  <div class="arch-row">
-    {b14}<div class="arch-arrow">◄►</div>{b15}<div class="arch-arrow">◄►</div>{b16}
-  </div>
-</div>
-""".format(
-        b1=_arch_block("24/7 Server", ["orchestratie", "scheduler", "monitoring"]),
-        b2=_arch_block("Gestructureerde Webscraping", ["speech", "reports", "alerts", "marktdata"]),
-        b3=_arch_block("Speech", ["audio", "video"]),
-        b4=_arch_block("Audio/Video Analyse", ["tekst", "emotie", "pauses", "volume", "pitch", "gezicht", "lichaamstaal"]),
-        b5=_arch_block("Reports &amp; Alerts", ["business", "overheidsuitgaven", "onafhankelijk", "nieuws", "point loops"]),
-        b6=_arch_block("AI Agent (fundamenteel)", ["concurrenten", "logistiek", "geschiedenis", "economische waarden"]),
-        b7=_arch_block("Regionale Scores", ["veiligheid", "tevredenheid", "sociale zekerheid", "bedrijfseconomisch"]),
-        b8=_arch_block("Fusion Model", ["kwaliteit", "zekerheid", "algemene emotie"], "core"),
-        b9=_arch_block("RL-Fusion Model", ["buy", "sell", "hold", "hedge", "other"], "core"),
-        b10=_arch_block("Monte Carlo", ["VaR95", "ES95", "crash-kans"], "risk"),
-        b11=_arch_block("Risico-Engine", ["sizing", "drawdown-guard", "stress-test", "hedging"], "risk"),
-        b12=_arch_block("Output Actie", ["aandelen", "ETF's", "opties", "obligaties", "cash"], "action"),
-        b13=_arch_block("Executie (paper/live)", ["broker-gateway", "orderrouting", "reconciliatie"], "action"),
-        b14=_arch_block("B2B Bottleneck", ["supply-chain", "vraagdruk", "knelpunten"]),
-        b15=_arch_block("Regime-Detectie", ["bull", "bear", "highvol", "crash"]),
-        b16=_arch_block("Orderflow / Macro", ["COT", "optie-flow", "rente-curve", "PMI"]),
-    )
+    # Node-posities (x, y, breedte, hoogte).
+    # Laag 1
+    n_server = _node("server", 150, 45, 200, 46, "24/7 Server", ["orchestratie · scheduler"], "data")
+    n_scrape = _node("scrape", 480, 45, 280, 46, "Webscraping", ["speech · reports · alerts · marktdata"], "data")
+    # Laag 2 signalen
+    n_speech = _node("speech", 90, 195, 170, 54, "Speech", ["CEO's · landsleiders"], "")
+    n_reports = _node("reports", 290, 195, 190, 54, "Reports & Alerts", ["quarterly · overheidsuitgaven"], "")
+    n_alerts = _node("alerts", 520, 195, 170, 54, "Nieuws & Point-loops", ["alerts"], "")
+    # Uitbreidingen (nu geintegreerd in laag 2)
+    n_bottleneck = _node("bottleneck", 720, 195, 190, 54, "B2B Bottleneck", ["supply-chain · knelpunten"], "")
+    n_regional = _node("regional", 90, 270, 170, 50, "Regionale Scores", ["veiligheid · economie"], "")
+    n_regime = _node("regime", 520, 270, 170, 50, "Regime / Orderflow", ["bull · crash · COT"], "")
+    # Laag 3 fusion
+    n_fusion = _node("fusion", 390, 375, 220, 56, "Fusion Model", ["kwaliteit · zekerheid · emotie"], "core", "gCore")
+    # Laag 4
+    n_rl = _node("rl", 140, 530, 210, 56, "RL-Fusion Model", ["buy · sell · hold · hedge"], "core", "gCore")
+    n_mc = _node("mc", 420, 530, 180, 44, "Monte Carlo", ["VaR95 · ES95 · crash-kans"], "risk", "gRisk")
+    n_risk = _node("risk", 640, 530, 220, 56, "Risk Engine v2.1", ["strategic · tactical · emergency · recovery"], "risk", "gRisk")
+    # Laag 5
+    n_action = _node("action", 240, 715, 200, 50, "Output Actie", ["aandelen · ETF's · obligaties · cash"], "action", "gCore")
+    n_exec = _node("exec", 560, 715, 200, 50, "Executie", ["paper · live · fail-closed"], "action", "gCore")
+
+    # Centra (onder/ boven van nodes) voor edge-verbindingen.
+    def edge_bottom_center(x, y, w, h): return (x + w/2, y + h)
+    def edge_top_center(x, y, w, h): return (x + w/2, y)
+
+    e = {}
+    # server(onderkant) -> scrape(onderkant? nee: rechts naar links)
+    # Gebruik zijkant-verbindingen om het netjes te laten lopen:
+    # server rechts -> scrape links
+    e["e_server_scrape"] = _edge(350, 68, 480, 68, cx=0.5, cy=0.5)  # horizontaal
+    # scrape onder -> elke signaal-top
+    e["e_scrape_speech"] = _edge(560, 91, 175, 195, 0.5, 0.5)
+    e["e_scrape_reports"] = _edge(610, 91, 385, 195, 0.5, 0.45)
+    e["e_scrape_alerts"] = _edge(655, 91, 605, 195, 0.5, 0.5)
+    # signalen -> fusion (fusion-top ~ y=375)
+    e["e_speech_fusion"] = _edge(175, 249, 480, 375, 0.5, 0.4)
+    e["e_reports_fusion"] = _edge(385, 249, 500, 375, 0.5, 0.4)
+    e["e_alerts_fusion"] = _edge(605, 249, 520, 375, 0.5, 0.45)
+    e["e_bottleneck_fusion"] = _edge(815, 249, 550, 375, 0.5, 0.5)
+    e["e_regional_fusion"] = _edge(175, 320, 500, 375, 0.5, 0.4)
+    e["e_regime_fusion"] = _edge(605, 320, 520, 375, 0.5, 0.45)
+    # fusion -> rl
+    e["e_fusion_rl"] = _edge(500, 431, 245, 530, 0.5, 0.4)
+    # rl -> risk, mc -> risk
+    e["e_rl_risk"] = _edge(245, 586, 640, 558, 0.5, 0.4)
+    e["e_mc_risk"] = _edge(510, 574, 640, 558, 0.5, 0.4)
+    # risk -> actie, actie -> exec
+    e["e_risk_action"] = _edge(750, 586, 340, 715, 0.5, 0.4)
+    e["e_action_exec"] = _edge(440, 765, 560, 765, 0.5, 0.5)
+
+    # Bouw de SVG door alleen de echte placeholders te vervangen (niet .format,
+    # want de SVG bevat CSS-braces die .format zou proberen in te vullen).
+    repl = {
+        "n_server": n_server, "n_scrape": n_scrape,
+        "n_speech": n_speech, "n_reports": n_reports, "n_alerts": n_alerts,
+        "n_bottleneck": n_bottleneck, "n_regional": n_regional, "n_regime": n_regime,
+        "n_fusion": n_fusion, "n_rl": n_rl, "n_mc": n_mc, "n_risk": n_risk,
+        "n_action": n_action, "n_exec": n_exec,
+    }
+    repl.update({k: e[k] for k in e})
+    out = ARCH_SVG
+    for token, val in repl.items():
+        out = out.replace("{" + token + "}", str(val))
+    return out
 
 
 def _backtest_html() -> str:
