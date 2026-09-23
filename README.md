@@ -42,6 +42,7 @@ On Windows, just double-click `install_windows.bat` (installs everything and run
 
 | Version | Core (risk engine) | Full (everything) |
 | --- | --- | --- |
+| v0.2.1 | [core](https://github.com/swan-jpeg/hermes-trading-bot/releases/download/v0.2.1/hermes-trading-bot-v0.2.1-core.zip) | [full](https://github.com/swan-jpeg/hermes-trading-bot/releases/download/v0.2.1/hermes-trading-bot-v0.2.1-full.zip) |
 | v0.2.0 | [core](https://github.com/swan-jpeg/hermes-trading-bot/releases/download/v0.2.0/hermes-trading-bot-v0.2.0-core.zip) | [full](https://github.com/swan-jpeg/hermes-trading-bot/releases/download/v0.2.0/hermes-trading-bot-v0.2.0-full.zip) |
 | v0.1.0 | [core](https://github.com/swan-jpeg/hermes-trading-bot/releases/download/v0.1.0/hermes-trading-bot-v0.1.0-core.zip) | [full](https://github.com/swan-jpeg/hermes-trading-bot/releases/download/v0.1.0/hermes-trading-bot-v0.1.0-full.zip) |
 <!-- RELEASES -->
