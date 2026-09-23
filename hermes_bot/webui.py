@@ -260,7 +260,7 @@ def _arch_block(title: str, subs: list[str], cls: str = "") -> str:
 
 
 # --- Architecture: SVG flow diagram with real bezier arrows (Apple design) ---
-ARCH_SVG = """<svg id="arch" viewBox="0 0 1000 940" style="width:100%;height:auto" xmlns="http://www.w3.org/2000/svg">
+ARCH_SVG = """<svg id="arch" viewBox="0 0 1100 840" style="width:100%;height:auto" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="gCore" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#0a84ff"/><stop offset="100%" stop-color="#30d158"/>
@@ -305,49 +305,52 @@ ARCH_SVG = """<svg id="arch" viewBox="0 0 1000 940" style="width:100%;height:aut
   </style>
 
   <!-- ===== LAYER 1 — DATA ===== -->
-  <g class="arch-cap"><text x="30" y="30">LAAG 1 · DATA</text></g>
+  <g class="arch-cap"><text x="30" y="28">LAAG 1 · DATA</text></g>
   {n_server}{n_scrape}
 
   <!-- ===== LAYER 2 — SIGNALS / EXTENSIONS ===== -->
-  <g class="arch-cap"><text x="30" y="180">LAAG 2 · SIGNALEN</text></g>
-  {n_speech}{n_reports}{n_alerts}
-  {n_bottleneck}{n_regional}{n_regime}{n_impact}
+  <g class="arch-cap"><text x="30" y="175">LAAG 2 · SIGNALEN</text></g>
+  {n_speech}{n_reports}{n_alerts}{n_bottleneck}
 
-  <!-- ===== LAYER 3 — FUSION ===== -->
-  <g class="arch-cap"><text x="30" y="360">LAAG 3 · FUSIE</text></g>
+  <!-- ===== LAYER 3 — IMPACT AGENT ===== -->
+  <g class="arch-cap"><text x="30" y="300">LAAG 3 · IMPACT (welke instrumenten)</text></g>
+  {n_impact}
+
+  <!-- ===== LAYER 4 — FUSION ===== -->
+  <g class="arch-cap"><text x="30" y="405">LAAG 4 · FUSIE (wat te kopen)</text></g>
   {n_fusion}
 
-  <!-- ===== LAYER 4 — DECISION + RISK ===== -->
-  <g class="arch-cap"><text x="30" y="520">LAAG 4 · BESLUIT + RISICO</text></g>
-  {n_rl}{n_mc}{n_risk}
+  <!-- ===== LAYER 5 — DECISION + RISK CLUSTER ===== -->
+  <g class="arch-cap"><text x="30" y="525">LAAG 5 · BESLUIT (RL) + RISICO-ENGINE</text></g>
+  {n_rl}{n_regional}{n_regime}{n_mc}
+  {n_risk}
 
-  <!-- ===== LAYER 5 — ACTION ===== -->
-  <g class="arch-cap"><text x="30" y="700">LAAG 5 · ACTIE</text></g>
+  <!-- ===== LAYER 6 — ACTION ===== -->
+  <g class="arch-cap"><text x="30" y="710">LAAG 6 · ACTIE</text></g>
   {n_action}{n_exec}
 
-  <!-- ===== EDGES (arrows between node centers) ===== -->
-  <!-- server -> scrape -->
+  <!-- ===== EDGES ===== -->
   <path class="arch-edge data" d="{e_server_scrape}" marker-end="url(#arrowData)"/>
-  <!-- scrape -> signals -->
   <path class="arch-edge data" d="{e_scrape_speech}" marker-end="url(#arrowData)"/>
   <path class="arch-edge data" d="{e_scrape_reports}" marker-end="url(#arrowData)"/>
   <path class="arch-edge data" d="{e_scrape_alerts}" marker-end="url(#arrowData)"/>
-  <!-- signals -> impact-agent (koppelt gebeurtenis aan beïnvloede instrumenten) -->
+  <path class="arch-edge data" d="{e_scrape_bottleneck}" marker-end="url(#arrowData)"/>
+  <!-- signals -> impact-agent -->
   <path class="arch-edge" d="{e_speech_impact}" marker-end="url(#arrow)"/>
   <path class="arch-edge" d="{e_reports_impact}" marker-end="url(#arrow)"/>
   <path class="arch-edge" d="{e_alerts_impact}" marker-end="url(#arrow)"/>
-  <!-- extensions -> fusion -->
+  <!-- bottleneck (alpha-signal) -> fusion -->
   <path class="arch-edge" d="{e_bottleneck_fusion}" marker-end="url(#arrow)"/>
-  <path class="arch-edge risk" d="{e_regional_risk}" marker-end="url(#arrowRisk)"/>
-  <path class="arch-edge risk" d="{e_regime_risk}" marker-end="url(#arrowRisk)"/>
-  <!-- impact -> fusion (per beïnvloede entiteit) -->
+  <!-- impact -> fusion -->
   <path class="arch-edge" d="{e_impact_fusion}" marker-end="url(#arrow)"/>
   <!-- fusion -> rl -->
   <path class="arch-edge" d="{e_fusion_rl}" marker-end="url(#arrow)"/>
-  <!-- rl / mc -> risk -->
+  <!-- risk inputs -> risk engine (RISK cluster) -->
   <path class="arch-edge" d="{e_rl_risk}" marker-end="url(#arrow)"/>
+  <path class="arch-edge risk" d="{e_regional_risk}" marker-end="url(#arrowRisk)"/>
+  <path class="arch-edge risk" d="{e_regime_risk}" marker-end="url(#arrowRisk)"/>
   <path class="arch-edge risk" d="{e_mc_risk}" marker-end="url(#arrowRisk)"/>
-  <!-- risk -> action -->
+  <!-- risk -> action -> exec -->
   <path class="arch-edge risk" d="{e_risk_action}" marker-end="url(#arrowRisk)"/>
   <path class="arch-edge" d="{e_action_exec}" marker-end="url(#arrow)"/>
 </svg>"""
@@ -439,9 +442,9 @@ COMPONENT_INFO = {
         "rol": "Scores regions on safety, satisfaction and economy.",
         "wat": "Computes per-region scores for safety, satisfaction, social "
                "security and business-economic changes. This context helps "
-               "the fusion model weigh regional risks.",
+               "the risk engine weigh regional risks.",
         "in": "webscraping → reports",
-        "uit": "regional scores → fusion",
+        "uit": "regional scores → risk engine",
         "code": "hermes_bot/expansions/__init__.py",
     },
     "regime": {
@@ -451,7 +454,7 @@ COMPONENT_INFO = {
                "recovery) and tracks orderflow/positioning (e.g. COT). This is an "
                "important input for the risk engine.",
         "in": "market data · orderflow",
-        "uit": "regime label → fusion + risk engine",
+        "uit": "regime label → risk engine",
         "code": "hermes_bot/expansions/__init__.py",
     },
     "impact": {
@@ -571,61 +574,57 @@ document.addEventListener('keydown', e => { if(e.key==='Escape') archClose(); })
 
 
 def _architecture_html() -> str:
-    # Node-posities (x, y, breedte, hoogte).
-    # Laag 1
-    n_server = _node("server", 150, 45, 200, 46, "24/7 Server", ["orchestratie · scheduler"], "data")
-    n_scrape = _node("scrape", 480, 45, 280, 46, "Webscraping", ["speech · reports · alerts · marktdata"], "data")
-    # Laag 2 signalen
-    n_speech = _node("speech", 90, 200, 170, 54, "Speech", ["CEO's · landsleiders"], "")
-    n_reports = _node("reports", 290, 200, 190, 54, "Reports & Alerts", ["quarterly · overheidsuitgaven"], "")
-    n_alerts = _node("alerts", 520, 200, 170, 54, "Nieuws & Point-loops", ["alerts"], "")
-    # Extensions (now integrated in layer 2)
-    n_bottleneck = _node("bottleneck", 720, 200, 190, 54, "B2B Bottleneck", ["supply-chain · knelpunten"], "")
-    n_regional = _node("regional", 90, 285, 170, 50, "Regionale Scores", ["veiligheid · economie"], "")
-    n_regime = _node("regime", 520, 285, 170, 50, "Regime / Orderflow", ["bull · crash · COT"], "")
-    # Impact agent: links events to affected instruments.
-    n_impact = _node("impact", 290, 360, 200, 50, "Impact Agent", ["welke stocks · LLM-skill"], "core", "gCore")
-    # Laag 3 fusion
-    n_fusion = _node("fusion", 390, 440, 220, 56, "Fusion Model", ["kwaliteit · zekerheid · emotie"], "core", "gCore")
-    # Laag 4
-    n_rl = _node("rl", 140, 580, 210, 56, "RL-Fusion Model", ["buy · sell · hold · hedge"], "core", "gCore")
-    n_mc = _node("mc", 420, 580, 180, 44, "Monte Carlo", ["VaR95 · ES95 · crash-kans"], "risk", "gRisk")
-    n_risk = _node("risk", 640, 580, 220, 56, "Risk Engine v2.1", ["strategic · tactical · emergency · recovery"], "risk", "gRisk")
-    # Laag 5
-    n_action = _node("action", 240, 760, 200, 50, "Output Actie", ["aandelen · ETF's · obligaties · cash"], "action", "gCore")
-    n_exec = _node("exec", 560, 760, 200, 50, "Executie", ["paper · live · fail-closed"], "action", "gCore")
-
-    # Centers (bottom/top of nodes) for edge connections.
-    def edge_bottom_center(x, y, w, h): return (x + w/2, y + h)
-    def edge_top_center(x, y, w, h): return (x + w/2, y)
+    # Node-posities (x, y, breedte, hoogte) — logisch van boven naar beneden,
+    # met een RISK-cluster rechts waarin regional/regime/MonteCarlo dicht bij
+    # de Risk Engine staan (korte, duidelijke pijlen — geen lange diagonalen).
+    # Laag 1 · DATA
+    n_server = _node("server", 160, 48, 220, 44, "24/7 Server", ["orchestratie · scheduler"], "data")
+    n_scrape = _node("scrape", 640, 48, 220, 44, "Webscraping", ["speech · reports · alerts · marktdata"], "data")
+    # Laag 2 · SIGNALEN (alpha-inputs voor impact/fusion)
+    n_speech = _node("speech", 70, 194, 160, 56, "Speech", ["CEO's · landsleiders"], "")
+    n_reports = _node("reports", 260, 194, 180, 56, "Reports & Alerts", ["quarterly · overheidsuitgaven"], "")
+    n_alerts = _node("alerts", 470, 194, 170, 56, "Nieuws & Point-loops", ["alerts"], "")
+    n_bottleneck = _node("bottleneck", 670, 194, 180, 56, "B2B Bottleneck", ["supply-chain · knelpunten"], "")
+    # Laag 3 · IMPACT AGENT (bepaalt welke instrumenten)
+    n_impact = _node("impact", 430, 320, 220, 52, "Impact Agent", ["welke stocks · LLM-skill"], "core", "gCore")
+    # Laag 4 · FUSIE (wat te kopen)
+    n_fusion = _node("fusion", 430, 425, 220, 56, "Fusion Model", ["kwaliteit · zekerheid · emotie"], "core", "gCore")
+    # Laag 5 · BESLUIT + RISICO (risk cluster: inputs dicht bij de risk engine)
+    n_rl = _node("rl", 120, 560, 230, 56, "RL-Fusion Model", ["buy · sell · hold · hedge"], "core", "gCore")
+    n_regional = _node("regional", 390, 550, 160, 46, "Regionale Scores", ["veiligheid · economie"], "risk", "gRisk")
+    n_regime = _node("regime", 580, 550, 180, 46, "Regime / Orderflow", ["bull · crash · COT"], "risk", "gRisk")
+    n_mc = _node("mc", 790, 550, 180, 46, "Monte Carlo", ["VaR95 · ES95 · crash-kans"], "risk", "gRisk")
+    n_risk = _node("risk", 490, 640, 230, 58, "Risk Engine v2.1", ["strategic · tactical · emergency · recovery"], "risk", "gRisk")
+    # Laag 6 · ACTIE
+    n_action = _node("action", 280, 750, 200, 50, "Output Actie", ["aandelen · ETF's · obligaties · cash"], "action", "gCore")
+    n_exec = _node("exec", 620, 750, 200, 50, "Executie", ["paper · live · fail-closed"], "action", "gCore")
 
     e = {}
-    # server(bottom) -> scrape(bottom? no: right to left)
-    # Use side connections to keep it tidy:
-    # server rechts -> scrape links
-    e["e_server_scrape"] = _edge(350, 68, 480, 68, cx=0.5, cy=0.5)  # horizontaal
-    # scrape bottom -> each signal top
-    e["e_scrape_speech"] = _edge(560, 91, 175, 200, 0.5, 0.5)
-    e["e_scrape_reports"] = _edge(610, 91, 385, 200, 0.5, 0.45)
-    e["e_scrape_alerts"] = _edge(655, 91, 605, 200, 0.5, 0.5)
-    # signals -> impact-agent (links event to affected instruments)
-    e["e_speech_impact"] = _edge(175, 254, 300, 360, 0.5, 0.4)
-    e["e_reports_impact"] = _edge(385, 254, 390, 360, 0.5, 0.4)
-    e["e_alerts_impact"] = _edge(605, 254, 480, 360, 0.5, 0.45)
-    # extensions -> fusion (bottleneck/regional/regime go directly to fusion)
-    e["e_bottleneck_fusion"] = _edge(815, 254, 550, 440, 0.5, 0.5)
-    e["e_regional_risk"] = _edge(175, 335, 640, 608, 0.5, 0.4)
-    e["e_regime_risk"] = _edge(605, 335, 750, 580, 0.5, 0.45)
+    # server -> scrape (horizontaal)
+    e["e_server_scrape"] = _edge(380, 70, 640, 70, cx=0.5, cy=0.5)
+    # scrape bottom -> el signaal top
+    e["e_scrape_speech"] = _edge(700, 92, 150, 194, 0.5, 0.4)
+    e["e_scrape_reports"] = _edge(720, 92, 350, 194, 0.5, 0.4)
+    e["e_scrape_alerts"] = _edge(740, 92, 555, 194, 0.5, 0.4)
+    e["e_scrape_bottleneck"] = _edge(760, 92, 760, 194, 0.5, 0.4)
+    # signalen -> impact-agent (welke instrumenten)
+    e["e_speech_impact"] = _edge(150, 250, 450, 320, 0.5, 0.4)
+    e["e_reports_impact"] = _edge(350, 250, 480, 320, 0.5, 0.4)
+    e["e_alerts_impact"] = _edge(555, 250, 540, 320, 0.5, 0.4)
+    # bottleneck: alpha-signal -> fusion (via dezelfde impact-lijn niet; rechstreeks)
+    e["e_bottleneck_fusion"] = _edge(760, 250, 560, 425, 0.5, 0.5)
     # impact -> fusion (per beïnvloede entiteit)
-    e["e_impact_fusion"] = _edge(390, 410, 480, 440, 0.5, 0.4)
-    # fusion -> rl
-    e["e_fusion_rl"] = _edge(500, 496, 245, 580, 0.5, 0.4)
-    # rl -> risk, mc -> risk
-    e["e_rl_risk"] = _edge(245, 636, 640, 608, 0.5, 0.4)
-    e["e_mc_risk"] = _edge(510, 624, 640, 608, 0.5, 0.4)
+    e["e_impact_fusion"] = _edge(540, 372, 540, 425, 0.5, 0.4)
+    # fusion -> rl (links)
+    e["e_fusion_rl"] = _edge(500, 481, 235, 560, 0.5, 0.4)
+    # RISK-cluster: inputs -> risk engine (korte pijlen)
+    e["e_rl_risk"] = _edge(180, 616, 380, 640, 0.5, 0.4)
+    e["e_regional_risk"] = _edge(470, 596, 400, 640, 0.5, 0.4)
+    e["e_regime_risk"] = _edge(670, 596, 500, 640, 0.5, 0.4)
+    e["e_mc_risk"] = _edge(880, 596, 510, 640, 0.5, 0.4)
     # risk -> actie, actie -> exec
-    e["e_risk_action"] = _edge(750, 636, 340, 760, 0.5, 0.4)
-    e["e_action_exec"] = _edge(440, 810, 560, 810, 0.5, 0.5)
+    e["e_risk_action"] = _edge(605, 698, 380, 750, 0.5, 0.4)
+    e["e_action_exec"] = _edge(480, 800, 620, 800, 0.5, 0.5)
 
     # Build the SVG by replacing only the real placeholders (not .format,
     # because the SVG contains CSS braces that .format would try to fill).
@@ -633,8 +632,9 @@ def _architecture_html() -> str:
         "n_server": n_server, "n_scrape": n_scrape,
         "n_speech": n_speech, "n_reports": n_reports, "n_alerts": n_alerts,
         "n_bottleneck": n_bottleneck, "n_regional": n_regional, "n_regime": n_regime,
+        "n_mc": n_mc,
         "n_impact": n_impact,
-        "n_fusion": n_fusion, "n_rl": n_rl, "n_mc": n_mc, "n_risk": n_risk,
+        "n_fusion": n_fusion, "n_rl": n_rl, "n_risk": n_risk,
         "n_action": n_action, "n_exec": n_exec,
     }
     repl.update({k: e[k] for k in e})
