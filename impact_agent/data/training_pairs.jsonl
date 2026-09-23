@@ -1,0 +1,3 @@
+{"prompt": "Gebeurtenis (speech): Trump says Jensen Huang is a good guy, you can trust him\nWelke instrumenten worden geraakt?", "completion": "NVDA (stock, sentiment 0.8), AMD (stock, sentiment 0.5)"}
+{"prompt": "Gebeurtenis (report): Government announces new infrastructure spending\nWelke instrumenten worden geraakt?", "completion": "AGG (bond, sentiment 0.4), XLI (stock, sentiment 0.6)"}
+{"prompt": "Gebeurtenis (report): Nvidia reports record semiconductor demand for AI chips\nWelke instrumenten worden geraakt?", "completion": "NVDA (stock, sentiment 0.9), TSM (stock, sentiment 0.7)"}
