@@ -130,11 +130,15 @@ def _build_zip(root: pathlib.Path, only: list[str] | None, version: str, kind: s
     return buf.getvalue()
 
 
-def _upload_asset(release_url: str, token: str, path: pathlib.Path) -> None:
-    """Upload een artefact naar een release (GitHub API)."""
+def _upload_asset(release_id: str, token: str, path: pathlib.Path) -> None:
+    """Upload een artefact naar een release (GitHub uploads API)."""
     data = path.read_bytes()
+    upload_base = (
+        "https://uploads.github.com/repos/swan-jpeg/hermes-trading-bot/"
+        f"releases/{release_id}/assets"
+    )
     req = urllib.request.Request(
-        f"{release_url}/assets?name={path.name}", method="POST")
+        f"{upload_base}?name={path.name}", method="POST")
     req.add_header("Authorization", f"Bearer {token}")
     req.add_header("Accept", "application/vnd.github+json")
     req.add_header("Content-Type", "application/zip")
@@ -154,17 +158,17 @@ def _update_readme(version: str, core_name: str, full_name: str) -> None:
            f"releases/download/{version}/{full_name}) |")
     marker = "<!-- RELEASES -->"
     if marker in text:
-        # Vervang de tabel: nieuwe rij na de header.
+        # Vervang de tabel: nieuwe rij direct na de separator (vóór de marker).
         lines = text.splitlines()
         idx = next(i for i, ln in enumerate(lines) if marker in ln)
-        # Zoek de header-rij en separator.
+        # Zoek de separator vóór de marker (de tabel-header).
         insert_at = None
-        for i in range(idx, min(idx + 6, len(lines))):
+        for i in range(idx - 1, max(0, idx - 6), -1):
             if lines[i].startswith("| ---"):
                 insert_at = i + 1
                 break
         if insert_at is None:
-            insert_at = idx + 1
+            insert_at = idx
         lines.insert(insert_at, row)
         readme.write_text("\n".join(lines) + "\n")
     else:
@@ -227,7 +231,7 @@ def main() -> int:
     try:
         with urllib.request.urlopen(req, timeout=60) as r:
             d = json.loads(r.read())
-            release_url = d["url"]
+            release_id = d["id"]
             print(f"Release aangemaakt: {d['html_url']}")
     except urllib.error.HTTPError as e:
         print(f"⚠ Release aanmaken mislukt: {e.code} {e.read()[:200]}")
@@ -239,8 +243,8 @@ def main() -> int:
     core_path.parent.mkdir(parents=True, exist_ok=True)
     core_path.write_bytes(core_zip)
     full_path.write_bytes(full_zip)
-    _upload_asset(release_url, token, core_path)
-    _upload_asset(release_url, token, full_path)
+    _upload_asset(release_id, token, core_path)
+    _upload_asset(release_id, token, full_path)
 
     # Werk de README bij en commit.
     _update_readme(version, core_name, full_name)
