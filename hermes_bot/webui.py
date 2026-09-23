@@ -578,7 +578,7 @@ def _architecture_html() -> str:
     n_bottleneck = _node("bottleneck", 720, 200, 190, 54, "B2B Bottleneck", ["supply-chain · knelpunten"], "")
     n_regional = _node("regional", 90, 285, 170, 50, "Regionale Scores", ["veiligheid · economie"], "")
     n_regime = _node("regime", 520, 285, 170, 50, "Regime / Orderflow", ["bull · crash · COT"], "")
-    # Impact-agent: koppelt gebeurtenissen aan beïnvloede instrumenten.
+    # Impact agent: links events to affected instruments.
     n_impact = _node("impact", 290, 360, 200, 50, "Impact Agent", ["welke stocks · obligaties · ETF's"], "core", "gCore")
     # Laag 3 fusion
     n_fusion = _node("fusion", 390, 440, 220, 56, "Fusion Model", ["kwaliteit · zekerheid · emotie"], "core", "gCore")
@@ -603,11 +603,11 @@ def _architecture_html() -> str:
     e["e_scrape_speech"] = _edge(560, 91, 175, 200, 0.5, 0.5)
     e["e_scrape_reports"] = _edge(610, 91, 385, 200, 0.5, 0.45)
     e["e_scrape_alerts"] = _edge(655, 91, 605, 200, 0.5, 0.5)
-    # signalen -> impact-agent (koppelt gebeurtenis aan beïnvloede instrumenten)
+    # signals -> impact-agent (links event to affected instruments)
     e["e_speech_impact"] = _edge(175, 254, 300, 360, 0.5, 0.4)
     e["e_reports_impact"] = _edge(385, 254, 390, 360, 0.5, 0.4)
     e["e_alerts_impact"] = _edge(605, 254, 480, 360, 0.5, 0.45)
-    # extensions -> fusion (bottleneck/regional/regime gaan direct naar fusion)
+    # extensions -> fusion (bottleneck/regional/regime go directly to fusion)
     e["e_bottleneck_fusion"] = _edge(815, 254, 550, 440, 0.5, 0.5)
     e["e_regional_fusion"] = _edge(175, 335, 500, 440, 0.5, 0.4)
     e["e_regime_fusion"] = _edge(605, 335, 520, 440, 0.5, 0.45)

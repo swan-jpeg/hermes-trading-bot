@@ -1,3 +1,0 @@
-{"event": "Trump says Jensen Huang is a good guy, you can trust him", "source": "speech", "impacted": [{"entity": "NVDA", "asset_class": "stock", "sentiment": 0.8}, {"entity": "AMD", "asset_class": "stock", "sentiment": 0.5}]}
-{"event": "Government announces new infrastructure spending", "source": "report", "impacted": [{"entity": "AGG", "asset_class": "bond", "sentiment": 0.4}, {"entity": "XLI", "asset_class": "stock", "sentiment": 0.6}]}
-{"event": "Nvidia reports record semiconductor demand for AI chips", "source": "report", "impacted": [{"entity": "NVDA", "asset_class": "stock", "sentiment": 0.9}, {"entity": "TSM", "asset_class": "stock", "sentiment": 0.7}]}

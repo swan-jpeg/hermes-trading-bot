@@ -1,4 +1,4 @@
-"""Tests for the Impact Agent (koppelt gebeurtenissen aan beïnvloede instrumenten)."""
+"""Tests for the Impact Agent (links events to affected instruments)."""
 from __future__ import annotations
 
 from hermes_bot.impact import ImpactAgent

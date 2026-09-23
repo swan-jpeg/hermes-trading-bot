@@ -1,4 +1,4 @@
-"""Impact Agent — koppelt gebeurtenissen aan beïnvloede instrumenten.
+"""Impact Agent — links events to affected instruments.
 
 De ontbrekende schakel in de keten: bepaalt WELKE instrumenten (stocks,
 obligaties, ETF's) geraakt worden door een gebeurtenis (speech, kwartaalrapport,
@@ -84,7 +84,7 @@ _SECTOR_MAP: dict[str, dict] = {
 
 @dataclass
 class ImpactResult:
-    """Output van de impact-agent: welke instrumenten worden geraakt."""
+    """Output of the impact agent: which instruments are hit."""
 
     event: str
     matched_sectors: list[str] = field(default_factory=list)
@@ -93,21 +93,21 @@ class ImpactResult:
 
 
 class ImpactAgent:
-    """Koppelt een gebeurtenis aan beïnvloede instrumenten via keyword-matching."""
+    """Links an event to affected instruments via keyword matching."""
 
     def __init__(self, sector_map: dict | None = None) -> None:
         self.sector_map = sector_map or _SECTOR_MAP
 
     def analyze(self, event: str, source: str = "news",
                entity_id: str = "") -> ImpactResult:
-        """Bepaal welke instrumenten door deze gebeurtenis worden geraakt.
+        """Determine which instruments are hit by this event."""
 
         event: de tekst van de gebeurtenis (speech, rapport, overheidsuitgave).
         source: speech | report | alert | government.
         entity_id: optionele entiteit (bv. "trump") die ook als hint dient.
         """
         text = (event + " " + entity_id).lower()
-        # Speech van een wereldleider (trump, biden, putin, ...) -> macro-impact.
+        # Speech of a world leader (trump, biden, putin, ...) -> macro impact.
         if source == "speech" and any(
             leader in entity_id.lower()
             for leader in ("trump", "biden", "putin", "leader", "president", "minister")
@@ -124,7 +124,7 @@ class ImpactAgent:
                         "asset_class": info["asset_class"],
                         "reason": f"{sector} ({source})",
                     })
-        # Dedupliceer op entity (behoud eerste).
+        # Deduplicate on entity (keep first).
         seen: set[str] = set()
         unique: list[dict] = []
         for item in impacted:
@@ -140,7 +140,7 @@ class ImpactAgent:
         )
 
     def to_fusion_inputs(self, result: ImpactResult, sentiment: float = 0.0) -> list[dict]:
-        """Zet de impact-analyse om naar fusion-inputs per beïnvloede entiteit.
+        """Convert the impact analysis to fusion inputs per affected entity."""
 
         Elke beïnvloede entiteit krijgt een eigen fusion-input, zodat het
         fusion-model + RL-model per instrument kunnen beslissen.
@@ -161,7 +161,7 @@ class ImpactAgent:
 
 
 def build_impact_agent(config: dict | None = None) -> ImpactAgent:
-    """Factory: bouw de impact-agent (keyword-matching + optionele LLM)."""
+    """Factory: build the impact agent (keyword-matching + optional LLM)."""
     cfg = config or {}
     if cfg.get("use_llm"):
         return LLMImpactAgent(
@@ -170,7 +170,7 @@ def build_impact_agent(config: dict | None = None) -> ImpactAgent:
 
 
 class LLMImpactAgent(ImpactAgent):
-    """Impact Agent met optionele LLM-interpretatie.
+    """Impact Agent with optional LLM interpretation.
 
     Gebruikt een gratis AI-model (via API-key uit .env, NIET in GitHub) om de
     gebeurtenis te interpreteren en beïnvloede instrumenten te bepalen. Dit
@@ -204,13 +204,13 @@ class LLMImpactAgent(ImpactAgent):
 
     def analyze(self, event: str, source: str = "news",
                 entity_id: str = "") -> ImpactResult:
-        """Bepaal beïnvloede instrumenten, met LLM-interpretatie als beschikbaar."""
-        # Eerst de snelle keyword-matching (altijd).
+        """Determine affected instruments, using LLM interpretation if available."""
+        # First the fast keyword matching (always).
         base = super().analyze(event, source, entity_id)
         key = self._get_key()
         if not key or not event.strip():
             return base
-        # LLM-interpretatie: vraag het model welke instrumenten geraakt worden.
+        # LLM interpretation: ask the model which instruments are hit.
         try:
             llm_impact = self._llm_interpret(event, source, key)
             if llm_impact:
@@ -225,12 +225,12 @@ class LLMImpactAgent(ImpactAgent):
         return base
 
     def _llm_interpret(self, event: str, source: str, key: str) -> list[dict]:
-        """Vraag het LLM (via de skill) welke instrumenten geraakt worden."""
+        """Ask the LLM (via the skill) which instruments are hit."""
         import json
         import urllib.error
         import urllib.request
 
-        # Laad de impact-agent skill als system-prompt (indien aanwezig).
+        # Load the impact agent skill as system prompt (if present).
         skill_path = (pathlib.Path(__file__).resolve().parent.parent
                       / "impact_agent" / "skill" / "impact-agent-skill.md")
         system_prompt = "Je bent een financieel impact-analist. Antwoord alleen met geldige JSON."
@@ -259,7 +259,7 @@ class LLMImpactAgent(ImpactAgent):
         with urllib.request.urlopen(req, timeout=30) as r:
             d = json.loads(r.read())
         content = d["choices"][0]["message"]["content"].strip()
-        # Haal de JSON-array eruit (het model kan er tekst omheen zetten).
+        # Extract the JSON array from it (the model might put text around it).
         start = content.find("[")
         end = content.rfind("]")
         if start == -1 or end == -1:

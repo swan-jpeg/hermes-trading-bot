@@ -169,7 +169,7 @@ def _update_readme(version: str, core_name: str, full_name: str,
            f"{changelog or '—'} | {stamp} |")
     marker = "<!-- RELEASES -->"
     if marker in text:
-        # Idempotent: als deze versie al in de tabel staat, niet opnieuw toevoegen.
+        # Idempotent: if this version is already in the table, do not add it again.
         if f"| {version} |" in text:
             return
         # Replace the table: new row right after the separator (before the marker).

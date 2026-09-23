@@ -159,7 +159,7 @@ class Pipeline:
         self.risk = RiskEngineV21(config or {})
         self.mc = MonteCarloEngineV2(seed=self.cfg.get("seed", 42), n_paths=1000)
         self.bottleneck_analyzer = BottleneckAnalyzer()
-        # Impact-agent: keyword-matching, of met LLM-interpretatie als config dat vraagt.
+        # Impact agent: keyword matching, or with LLM interpretation as config that asks for it.
         if self.cfg.get("impact_use_llm"):
             self.impact_agent = LLMImpactAgent(
                 model=self.cfg.get("impact_llm_model", "meta-llama/llama-3.1-8b-instruct:free"))
@@ -185,15 +185,15 @@ class Pipeline:
         regional_input = build_regional_scores_input(reports)
         regime_input = build_regime_input(regime_features)
 
-        # 2b. IMPACT-AGENT: koppel gebeurtenissen aan beïnvloede instrumenten.
-        #     Bepaalt WELKE stocks/obligaties/ETF's geraakt worden door de
-        #     speech/report/alert, en levert per-entiteit fusion-inputs.
+        # 2b. IMPACT-AGENT: connect events to affected instruments.
+        #     Determines WHICH stocks/bonds/ETFs get affected by the
+        #     speech/report/alert, and provides per-entity fusion inputs.
         impact_inputs: list[dict] = []
         impacted: list[dict] = []
         for inp in inputs:
             text = inp.get("body") or inp.get("headline") or inp.get("summary", "")
             entity_id = inp.get("entity_id", "")
-            # Skip alleen als er GEEN tekst EN GEEN entity_id is (niets om te matchen).
+            # Skip only if there is NO text AND NO entity_id (nothing to match).
             if not text and not entity_id:
                 continue
             result = self.impact_agent.analyze(
