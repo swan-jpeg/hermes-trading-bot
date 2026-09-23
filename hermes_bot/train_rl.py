@@ -34,30 +34,33 @@ warnings.filterwarnings("ignore")
 MODELS_DIR = pathlib.Path(__file__).resolve().parent.parent / "models"
 
 
-def resolve_device(requested: str) -> str:
+def resolve_device(requested: str):
     """Pick the training device: auto | cpu | cuda | dml (DirectML for AMD).
+
+    Returns a torch.device (or the DirectML device object) that stable-baselines3
+    accepts. SB3's get_device() does NOT accept the string "dml" — it needs a
+    torch.device object, which torch_directml.device() provides.
 
     - "auto": CUDA if available, else DirectML if torch-directml is installed,
       else CPU.
     - "dml": DirectML (AMD Radeon on Windows). Falls back to CPU if the
       torch-directml package is not installed.
     """
-    if requested == "cpu":
-        return "cpu"
-    if requested == "cuda":
-        import torch
+    import torch
 
-        return "cuda" if torch.cuda.is_available() else "cpu"
+    if requested == "cpu":
+        return torch.device("cpu")
+    if requested == "cuda":
+        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if requested == "dml":
         try:
-            import torch_directml  # noqa: F401
+            import torch_directml
 
-            return "dml"
+            return torch_directml.device()
         except Exception:  # noqa: BLE001
             print("torch-directml niet geïnstalleerd — val terug op CPU.")
-            return "cpu"
+            return torch.device("cpu")
     # auto
-    import torch
 
     if torch.cuda.is_available():
         return "cuda"
