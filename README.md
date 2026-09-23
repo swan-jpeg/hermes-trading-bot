@@ -93,6 +93,17 @@ uv run python -m hermes_bot.train_rl --ticker SPY --years 5 --timesteps 200000
 # 3. The model is saved to models/rl_ppo_SPY.zip
 ```
 
+**AMD Radeon GPU on Windows?** PyTorch uses CUDA (NVIDIA) by default, so a
+Radeon is not used automatically. Install PyTorch DirectML and pass `--device dml`:
+
+```bash
+uv pip install torch-directml
+uv run python -m hermes_bot.train_rl --device dml --ticker SPY --years 5 --timesteps 200000
+```
+
+> Note: DirectML is a public preview and for this tiny PPO model it is often
+> NOT faster than CPU. If `--device dml` is slower, just drop it and train on CPU.
+
 The trained model plugs into the existing decision layer behind the same
 interface — the risk engine still gates every proposal (RL proposes, Risk approves).
 

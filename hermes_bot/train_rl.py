@@ -5,6 +5,11 @@ Run on your Windows PC (8GB VRAM / 16GB RAM is plenty — PPO is tiny):
     uv sync --extra ml --extra data
     uv run python -m hermes_bot.train_rl --ticker SPY --years 5 --timesteps 200000
 
+To use an AMD Radeon GPU on Windows, install PyTorch DirectML first:
+
+    uv pip install torch-directml
+    uv run python -m hermes_bot.train_rl --device dml --ticker SPY --years 5 --timesteps 200000
+
 The trained model is saved to `models/rl_ppo_<ticker>.zip`. Load it later with
 `RLFusionModel(policy=TrainedPolicy(model))` — the policy interface is unchanged,
 so the risk engine still gates every proposal.
@@ -27,6 +32,41 @@ from hermes_bot.rl.env import TradingEnv
 warnings.filterwarnings("ignore")
 
 MODELS_DIR = pathlib.Path(__file__).resolve().parent.parent / "models"
+
+
+def resolve_device(requested: str) -> str:
+    """Pick the training device: auto | cpu | cuda | dml (DirectML for AMD).
+
+    - "auto": CUDA if available, else DirectML if torch-directml is installed,
+      else CPU.
+    - "dml": DirectML (AMD Radeon on Windows). Falls back to CPU if the
+      torch-directml package is not installed.
+    """
+    if requested == "cpu":
+        return "cpu"
+    if requested == "cuda":
+        import torch
+
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    if requested == "dml":
+        try:
+            import torch_directml  # noqa: F401
+
+            return "dml"
+        except Exception:  # noqa: BLE001
+            print("torch-directml niet geïnstalleerd — val terug op CPU.")
+            return "cpu"
+    # auto
+    import torch
+
+    if torch.cuda.is_available():
+        return "cuda"
+    try:
+        import torch_directml  # noqa: F401
+
+        return "dml"
+    except Exception:  # noqa: BLE001
+        return "cpu"
 
 
 def load_prices(ticker: str, years: int) -> np.ndarray:
@@ -99,6 +139,8 @@ def main() -> int:
     ap.add_argument("--years", type=int, default=5, help="jaren historie (default: 5)")
     ap.add_argument("--timesteps", type=int, default=200_000, help="PPO timesteps (default: 200k)")
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--device", default="auto",
+                    help="auto | cpu | cuda | dml (DirectML voor AMD Radeon op Windows)")
     args = ap.parse_args()
 
     print(f"Loading {args.ticker} ({args.years}y)...")
@@ -110,6 +152,9 @@ def main() -> int:
     print(f"Environment: obs={env.observation_space.shape}, act={env.action_space.n}")
 
     from stable_baselines3 import PPO
+
+    device = resolve_device(args.device)
+    print(f"Device: {device}")
 
     model = PPO(
         "MlpPolicy",
@@ -123,6 +168,7 @@ def main() -> int:
         clip_range=0.2,
         verbose=1,
         seed=args.seed,
+        device=device,
     )
 
     print(f"Training PPO for {args.timesteps} timesteps...")
