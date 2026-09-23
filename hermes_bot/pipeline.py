@@ -31,6 +31,7 @@ from hermes_bot.impact import ImpactAgent, LLMImpactAgent
 from hermes_bot.portfolio import PortfolioState
 from hermes_bot.risk_v2.montecarlo import MonteCarloEngineV2
 from hermes_bot.risk_v2_1 import RiskEngineV21
+from hermes_bot.rl.context import AssetContext, build_asset_context
 
 
 @dataclass
@@ -47,6 +48,7 @@ class PipelineResult:
     risk_budget: float = 0.0
     effective_exposure: float = 0.0
     decision: dict = field(default_factory=dict)
+    asset_contexts: list[dict] = field(default_factory=list)  # per-entiteit RL-input
 
 
 def collect_web_inputs(
@@ -190,6 +192,7 @@ class Pipeline:
         #     speech/report/alert, and provides per-entity fusion inputs.
         impact_inputs: list[dict] = []
         impacted: list[dict] = []
+        impact_vectors: dict[str, dict] = {}  # entity -> impact-vector (categorie 1)
         for inp in inputs:
             text = inp.get("body") or inp.get("headline") or inp.get("summary", "")
             entity_id = inp.get("entity_id", "")
@@ -205,6 +208,19 @@ class Pipeline:
                 impact_inputs.extend(
                     self.impact_agent.to_fusion_inputs(result, sentiment=inp.get("sentiment", 0.0))
                 )
+                # Impact-vector (categorie 1) per beïnvloede entiteit.
+                vec = {
+                    "direction": result.direction,
+                    "magnitude": result.magnitude,
+                    "confidence": result.confidence,
+                    "probability": result.probability,
+                    "duration": result.duration,
+                    "directness": result.directness,
+                    "novelty": result.novelty,
+                    "surprise": result.surprise,
+                }
+                for item in result.impacted:
+                    impact_vectors[item["entity"]] = vec
 
         # Regional scores + regime/orderflow are RISK inputs, not fusion inputs.
         # They go to the risk engine via alpha_signals (below), not to fusion.
@@ -212,6 +228,32 @@ class Pipeline:
 
         # 3. Fusion combines all sources.
         fused = self.fusion.fuse(all_inputs)
+
+        # 3b. Per beïnvloede entiteit een AssetContext bouwen (RL-input).
+        #     Impact-vector (categorie 1) + fusion (categorie 4) + bottleneck
+        #     (categorie 5) + bron-info (categorie 2). Dit is wat het RL-model
+        #     per asset ziet.
+        asset_contexts: list[AssetContext] = []
+        for item in impacted:
+            entity = item.get("entity", "")
+            if not entity:
+                continue
+            # Fusion per entiteit (alleen de impact-input voor die entiteit).
+            ent_inputs = [i for i in impact_inputs if i.get("entity_id") == entity]
+            ent_fused = self.fusion.fuse(ent_inputs) if ent_inputs else fused
+            # Bottleneck voor deze entiteit (indien aanwezig).
+            ent_bn = next((i for i in bottleneck_inputs if i.get("entity_id") == entity), None)
+            # Bron-info: uit de oorspronkelijke web-input die deze entiteit raakte.
+            src = next((i for i in inputs if i.get("entity_id") == entity), None)
+            ctx = build_asset_context(
+                impact=impact_vectors.get(entity, item),
+                fusion=ent_fused.model_dump() if hasattr(ent_fused, "model_dump") else ent_fused,
+                bottleneck=ent_bn,
+                source=src,
+                entity=entity,
+                asset_class=item.get("asset_class", ""),
+            )
+            asset_contexts.append(ctx)
 
         # 4. Risk engine (v2.1) with the v2.1 config.
         decision_sent = fused.emotie.get("sentiment", 0.0)
@@ -257,6 +299,7 @@ class Pipeline:
             risk_budget=round(breakdown.risk_budget, 4),
             effective_exposure=round(exposure, 4),
             decision=decision.model_dump(),
+            asset_contexts=[c.to_dict() for c in asset_contexts],
         )
 
     def record_equity(self, equity: float) -> None:

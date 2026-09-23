@@ -27,6 +27,7 @@ import numpy as np
 
 from hermes_bot.portfolio import PortfolioState
 from hermes_bot.rl import RulePolicy
+from hermes_bot.rl.context import AssetContext
 from hermes_bot.rl.env import TradingEnv
 
 warnings.filterwarnings("ignore")
@@ -108,6 +109,56 @@ def build_fusion_signals(prices: np.ndarray, seed: int = 42) -> list[dict]:
     return signals
 
 
+def build_asset_contexts(prices: np.ndarray, signals: list[dict],
+                          seed: int = 42) -> list[AssetContext]:
+    """Bouw per dag een rijke AssetContext voor RL-training.
+
+    In productie komt dit uit de impact agent + fusion + bottleneck + bron-info.
+    Voor training genereren we plausibele waarden zodat het model de mapping
+    impact-vector -> actie leert. De impact-vector (categorie 1) is de kern.
+    """
+    rng = np.random.default_rng(seed)
+    n = len(prices)
+    rets = np.diff(prices, prepend=prices[0]) / prices[0]
+    mom = np.convolve(rets, np.ones(5) / 5, mode="same")
+    contexts = []
+    for i in range(n):
+        s = float(np.clip(mom[i] * 20, -1, 1))
+        ctx = AssetContext(
+            entity="SPY", asset_class="etf",
+            # Categorie 1 — impact-vector (kern)
+            impact_direction=float(np.clip((s + 1) / 2, 0, 1)),
+            impact_magnitude=float(np.clip(abs(s), 0, 1)),
+            impact_confidence=float(np.clip(0.5 + abs(s) * 0.3, 0, 1)),
+            impact_probability=float(np.clip(0.5 + abs(s) * 0.2, 0, 1)),
+            impact_duration=0.5,
+            directness=0.8,
+            impact_novelty=float(rng.uniform(0, 0.5)),
+            market_surprise=float(rng.uniform(0, 0.4)),
+            # Categorie 2 — bron-info
+            source_quality=0.7, source_reliability=0.7, info_confidence=0.6,
+            info_completeness=0.6, cross_source_confirmation=0.5,
+            info_freshness=0.8, info_novelty=0.3,
+            # Categorie 4 — marktinterpretatie (uit fusion)
+            market_sentiment=float(np.clip((s + 1) / 2, 0, 1)),
+            sentiment_confidence=float(np.clip(0.5 + abs(s) * 0.3, 0, 1)),
+            market_expectation=0.5,
+            expectation_surprise=float(np.clip(abs(s) * 0.5, 0, 1)),
+            narrative_strength=float(np.clip(abs(s), 0, 1)),
+            market_attention=float(np.clip(abs(s) * 0.8, 0, 1)),
+            consensus_strength=0.5,
+            contrarian_strength=float(np.clip(abs(s) * 0.3, 0, 1)),
+            # Categorie 5 — bottleneck
+            demand_growth=0.4, supply_scarcity=0.3, bottleneck_strength=0.3,
+            pricing_power=0.4, capacity_constraint=0.3,
+            # Categorie 6 — tijd
+            information_age=0.9, impact_decay=0.8, expected_duration=0.5,
+            event_proximity=0.8, signal_persistence=0.6,
+        )
+        contexts.append(ctx)
+    return contexts
+
+
 def make_env(prices: np.ndarray, signals: list[dict], seed: int = 42) -> TradingEnv:
     """Build the training environment with a fresh portfolio + rule policy."""
     portfolio = PortfolioState(cash=100_000.0)
@@ -120,6 +171,7 @@ def make_env(prices: np.ndarray, signals: list[dict], seed: int = 42) -> Trading
             self.crash_prob = 0.05
             self.regime = "bull"
 
+    contexts = build_asset_contexts(prices, signals, seed)
     return TradingEnv(
         prices=prices,
         fusion_signals=signals,
@@ -128,6 +180,7 @@ def make_env(prices: np.ndarray, signals: list[dict], seed: int = 42) -> Trading
         rule_policy=policy,
         max_steps=len(prices),
         seed=seed,
+        asset_contexts=contexts,
     )
 
 

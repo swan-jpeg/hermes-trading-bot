@@ -96,6 +96,14 @@ class ImpactResult:
     matched_sectors: list[str] = field(default_factory=list)
     impacted: list[dict] = field(default_factory=list)  # [{entity, asset_class, reason}]
     confidence: float = 0.0
+    # Impact-vector (categorie 1 van de RL-inputs): per analyse, genormaliseerd.
+    direction: float = 0.5       # 0=negatief, 1=positief
+    magnitude: float = 0.0        # hoe groot de verwachte impact
+    probability: float = 0.0     # kans dat de impact optreedt
+    duration: float = 0.5        # hoe lang de impact blijft
+    directness: float = 0.0      # 1=direct geraakt, 0=indirect
+    novelty: float = 0.0         # hoe nieuw/onverwacht
+    surprise: float = 0.0        # afwijking van wat al verwacht werd
 
 
 class ImpactAgent:
@@ -138,11 +146,34 @@ class ImpactAgent:
                 seen.add(item["entity"])
                 unique.append(item)
         confidence = min(1.0, 0.3 + 0.2 * len(matched)) if matched else 0.0
+        # Impact-vector (categorie 1): afgeleid uit de match.
+        # direction: positief als er groei/positieve sectoren zijn, anders neutraal.
+        direction = 0.5
+        if matched:
+            pos_sectors = {"semiconductor", "actuators", "power", "battery",
+                           "consumer", "tech", "healthcare", "finance"}
+            neg_sectors = {"government", "macro"}
+            pos = sum(1 for s in matched if s in pos_sectors)
+            neg = sum(1 for s in matched if s in neg_sectors)
+            direction = 0.5 + 0.5 * (pos - neg) / max(1, len(matched))
+        magnitude = min(1.0, 0.2 + 0.2 * len(matched)) if matched else 0.0
+        probability = confidence  # kans dat de impact optreedt ~ zekerheid
+        duration = 0.5 if matched else 0.0  # neutraal; LLM kan dit verfijnen
+        directness = 1.0 if matched else 0.0  # keyword-match = direct geraakt
+        novelty = 0.3 if matched else 0.0     # default laag; LLM kan verhogen
+        surprise = 0.0  # default: geen marktverwachting bekend
         return ImpactResult(
             event=event,
             matched_sectors=matched,
             impacted=unique,
             confidence=round(confidence, 4),
+            direction=round(direction, 4),
+            magnitude=round(magnitude, 4),
+            probability=round(probability, 4),
+            duration=round(duration, 4),
+            directness=round(directness, 4),
+            novelty=round(novelty, 4),
+            surprise=round(surprise, 4),
         )
 
     def to_fusion_inputs(self, result: ImpactResult, sentiment: float = 0.0) -> list[dict]:
@@ -212,7 +243,7 @@ class LLMImpactAgent(ImpactAgent):
             return base
         # LLM-interpretatie: vraag het model welke instrumenten geraakt worden.
         try:
-            llm_impact = self._llm_interpret(event, source, key)
+            llm_impact, llm_meta = self._llm_interpret(event, source, key)
             if llm_impact:
                 # Combineer: LLM-resultaat + keyword-matching (dedupliceer).
                 combined = {i["entity"]: i for i in base.impacted}
@@ -220,12 +251,23 @@ class LLMImpactAgent(ImpactAgent):
                     combined[item["entity"]] = item
                 base.impacted = list(combined.values())
                 base.confidence = round(max(base.confidence, 0.7), 4)
+                # Impact-vector uit de LLM-meta (verfijnd t.o.v. keyword-match).
+                for k in ("direction", "magnitude", "probability", "duration",
+                          "directness", "novelty", "surprise"):
+                    if k in llm_meta:
+                        setattr(base, k, round(float(llm_meta[k]), 4))
         except Exception:  # noqa: BLE001
             pass  # fallback naar keyword-matching
         return base
 
-    def _llm_interpret(self, event: str, source: str, key: str) -> list[dict]:
-        """Vraag het LLM (via de skill) welke instrumenten geraakt worden."""
+    def _llm_interpret(self, event: str, source: str, key: str) -> tuple[list[dict], dict]:
+        """Vraag het LLM (via de skill) welke instrumenten geraakt worden.
+
+        Returns: (instrumenten, impact-vector-meta). De impact-vector-meta
+        bevat de categorie-1 velden (direction, magnitude, probability,
+        duration, directness, novelty, surprise) die het RL-model als kern
+        gebruikt.
+        """
         import json
         import urllib.error
         import urllib.request
@@ -240,14 +282,21 @@ class LLMImpactAgent(ImpactAgent):
         except OSError:
             pass
 
-        prompt = f"Gebeurtenis ({source}): {event}"
+        prompt = (
+            f"Gebeurtenis ({source}): {event}\n\n"
+            "Antwoord met een JSON-object:\n"
+            '{"impact": [{"entity": "NVDA", "asset_class": "stock", '
+            '"sentiment": 0.8, "reason": "..."}], '
+            '"meta": {"direction": 0.8, "magnitude": 0.7, "probability": 0.6, '
+            '"duration": 0.5, "directness": 0.9, "novelty": 0.4, "surprise": 0.3}}'
+        )
         payload = {
             "model": self.model,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt},
             ],
-            "max_tokens": 300,
+            "max_tokens": 400,
             "temperature": 0.1,
         }
         base = self._get_base_url().rstrip("/")
@@ -259,12 +308,17 @@ class LLMImpactAgent(ImpactAgent):
         with urllib.request.urlopen(req, timeout=30) as r:
             d = json.loads(r.read())
         content = d["choices"][0]["message"]["content"].strip()
-        # Haal de JSON-array eruit (het model kan er tekst omheen zetten).
-        start = content.find("[")
-        end = content.rfind("]")
+        # Haal het JSON-object eruit (het model kan er tekst omheen zetten).
+        start = content.find("{")
+        end = content.rfind("}")
         if start == -1 or end == -1:
-            return []
-        items = json.loads(content[start:end + 1])
+            return [], {}
+        try:
+            data = json.loads(content[start:end + 1])
+        except json.JSONDecodeError:
+            return [], {}
+        items = data.get("impact", [])
+        meta = data.get("meta", {})
         out = []
         for it in items:
             out.append({
@@ -273,7 +327,7 @@ class LLMImpactAgent(ImpactAgent):
                 "sentiment": float(it.get("sentiment", 0.0)),
                 "reason": it.get("reason", "llm"),
             })
-        return [i for i in out if i["entity"]]
+        return [i for i in out if i["entity"]], meta
 
 
 def build_impact_agent(config: dict | None = None) -> ImpactAgent:

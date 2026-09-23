@@ -18,6 +18,7 @@ import numpy as np
 from gymnasium import spaces
 
 from hermes_bot.rl import compute_reward
+from hermes_bot.rl.context import AssetContext
 from hermes_bot.schemas import Action
 
 if TYPE_CHECKING:
@@ -53,6 +54,7 @@ class TradingEnv(gym.Env):
         rule_policy,
         max_steps: int = 1000,
         seed: int = 42,
+        asset_contexts: list[AssetContext] | None = None,
     ) -> None:
         super().__init__()
         self.prices = np.asarray(prices, dtype=float)
@@ -62,10 +64,16 @@ class TradingEnv(gym.Env):
         self.rule_policy = rule_policy
         self.max_steps = max_steps
         self.rng = np.random.default_rng(seed)
+        # Rijke per-asset context (impact/fusion/bottleneck/source). Als niet
+        # gegeven, bouw een neutrale AssetContext per stap uit fusion_signals.
+        self.asset_contexts = asset_contexts or [
+            AssetContext() for _ in range(max(len(prices), 1))
+        ]
 
         self.action_space = spaces.Discrete(3)  # 0: HOLD, 1: BUY, 2: SELL
+        self.obs_dim = self.asset_contexts[0].obs_dim if self.asset_contexts else 9
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(9,), dtype=np.float32
+            low=-np.inf, high=np.inf, shape=(self.obs_dim,), dtype=np.float32
         )
 
         self.current_step = 0
@@ -163,34 +171,42 @@ class TradingEnv(gym.Env):
         return float(self.prices[min(self.current_step, len(self.prices) - 1)])
 
     def _get_observation(self) -> np.ndarray:
-        """Build the 9-dim observation vector from real values."""
-        fusion = self._current_fusion()
-        sentiment = float(fusion.get("sentiment", 0.0))
-        certainty = float(fusion.get("zekerheid", 0.0))
-        quality = float(fusion.get("kwaliteit", 0.0))
+        """Build the rich observation vector from the AssetContext.
+
+        De AssetContext draagt de impact-vector (categorie 1), bron-info
+        (categorie 2), relevance (categorie 3), marktinterpretatie (categorie
+        4), bottleneck (categorie 5) en tijd (categorie 6). De portfolio/risico
+        velden (regime, P&L, holding, allocatie, VaR, crash) worden hier
+        live ingevuld.
+        """
+        ctx = self._current_context()
 
         # Unrealized P&L % if holding.
         pnl = 0.0
         if self.entry_price and self.entry_price > 0:
             pnl = (self._current_price() - self.entry_price) / self.entry_price
 
-        return np.array([
-            sentiment,          # 0
-            certainty,          # 1
-            quality,            # 2
-            self.regime_code,   # 3
-            pnl,                # 4
-            float(self.holding_days),  # 5
-            self.allocation,    # 6
-            self.var_95,        # 7
-            self.crash_prob,    # 8
-        ], dtype=np.float32)
+        ctx.update(
+            regime_code=self.regime_code,
+            pnl=pnl,
+            holding_days=float(self.holding_days),
+            allocation=self.allocation,
+            var_95=self.var_95,
+            crash_prob=self.crash_prob,
+        )
+        return ctx.observation()
 
     def _current_fusion(self) -> dict:
         """Get the fusion signal for the current step (or a neutral default)."""
         if self.fusion_signals and self.current_step < len(self.fusion_signals):
             return self.fusion_signals[self.current_step]
         return {"sentiment": 0.0, "zekerheid": 0.5, "kwaliteit": 0.5}
+
+    def _current_context(self) -> AssetContext:
+        """Get the AssetContext for the current step (or a neutral default)."""
+        if self.asset_contexts and self.current_step < len(self.asset_contexts):
+            return self.asset_contexts[self.current_step]
+        return AssetContext()
 
     def set_risk_metrics(self, var_95: float, crash_prob: float, regime: str) -> None:
         """Inject Monte Carlo / regime values from the risk engine (per step)."""
