@@ -1,6 +1,6 @@
-# Hermes Trading Bot — runtime-instellingen (geen secrets; die gaan in .env)
+# Hermes Trading Bot — runtime settings (no secrets; those go in .env)
 universe:
-  # Start klein: high-liquidity assets. Uitbreiden na validatie.
+  # Start small: high-liquidity assets. Expand after validation.
   stocks:
     - AAPL
     - MSFT
@@ -13,28 +13,28 @@ universe:
   bonds:
     - AGG
   cash: USD
-  regiones: [US, EU, JP]
+  regions: [US, EU, JP]
 
 data:
   market_feed: yfinance   # yfinance | polygon | alpaca
   storage: postgres       # postgres | sqlite (dev)
   sqlite_path: var/tradingbot.db
 
-# Webscraping routes voor de 24/7 server.
-# Zet enabled: true om constant naar het web te kijken (speeches, reports, alerts).
-# server is te zwak om de zware modellen (whisper/DeepFace) te draaien -> offline.
+# Webscraping routes for the 24/7 server.
+# Set enabled: true to constantly watch the web (speeches, reports, alerts).
+# The server is too weak to run the heavy models (whisper/DeepFace) -> offline.
 webscraping:
-  enabled: false          # MASTER-knop: zet op true om alle routes aan te zetten
+  enabled: false          # MASTER switch: set to true to enable all routes
   routes:
     speech:
-      enabled: false      # speeches van CEO's/landsleiders (RSS nieuws)
-      interval_sec: 3600  # elk uur
+      enabled: false      # speeches from CEOs/world leaders (RSS news)
+      interval_sec: 3600  # every hour
     reports:
-      enabled: false      # quarterly reports + overheidsuitgaven
-      interval_sec: 86400 # dagelijks
+      enabled: false      # quarterly reports + government spending
+      interval_sec: 86400 # daily
     alerts:
-      enabled: false      # nieuws-alerts + point-loops
-      interval_sec: 600   # elke 10 min
+      enabled: false      # news alerts + point loops
+      interval_sec: 600   # every 10 min
 
 fusion:
   sources: [audiovisual, speech, report, alert, regional, bottleneck, agent, market]
@@ -44,8 +44,8 @@ risk:
   max_portfolio_drawdown: -0.08   # risk-off trigger
   max_asset_weight: 0.10          # per asset
   max_sector_risk: 0.20           # per sector/cluster
-  max_leverage: 0.0               # geen hefboom start
-  vol_target: 0.125               # annualized vol doel
+  max_leverage: 0.0               # no leverage to start
+  vol_target: 0.125               # annualized vol target
   cash_min_in_crash: 0.30
 
 rl:

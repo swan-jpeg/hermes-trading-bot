@@ -1,11 +1,11 @@
-"""Web-interface voor de tradingbot (poort 9124) — Apple-fluid design.
+"""Web interface for the trading bot (port 9124) — Apple-fluid design.
 
-Toont: dashboard, architectuur-diagram, code/mappen, Obsidian-noten,
-een werkende BACKTEST-tool (met equity-chart + benchmark), een DOWNLOAD-knop
-(zip voor GitHub-export, werkt op iPad) en GitHub-instructies.
+Shows: dashboard, architecture diagram, code/folders, Obsidian notes,
+a working BACKTEST tool (with equity chart + benchmark), a DOWNLOAD button
+(zip for GitHub export, works on iPad) and GitHub instructions.
 
-Zelfstandig met stdlib + markdown-it-py. Gebruik:
-    uv run python -m hermes_bot.webui   (of via systemd)
+Standalone with stdlib + markdown-it-py. Usage:
+    uv run python -m hermes_bot.webui   (or via systemd)
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from pathlib import Path
 from markdown_it import MarkdownIt
 
 ROOT = Path(__file__).resolve().parent.parent
-# Optionele pad naar een Obsidian-vault (alleen lokaal; placeholder voor publicatie).
+# Optional path to an Obsidian vault (local only; placeholder for publication).
 VAULT = Path(os.environ.get("HERMES_OBSIDIAN_VAULT", ""))
 PORT = 9124
 
@@ -128,7 +128,7 @@ summary:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); 
 .file a { color: var(--text); text-decoration: none; padding: 3px 8px; border-radius: 6px; display: inline-block; font-size: 14px; }
 .file a:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
 
-/* Architectuur blokken */
+/* Architecture blocks */
 .arch { display: flex; flex-direction: column; gap: 10px; align-items: center; }
 .arch-cap { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase;
   margin: 14px 0 4px; font-weight: 600; }
@@ -160,7 +160,7 @@ th { color: var(--muted); font-weight: 600; font-size: 12px; letter-spacing: .02
 .code-layout { display: grid; grid-template-columns: 300px 1fr; gap: 20px; align-items: start; }
 @media (max-width: 820px) { .code-layout { grid-template-columns: 1fr; } }
 
-/* Architectuur modal (klikbaar component) */
+/* Architecture modal (clickable component) */
 .arch-node { cursor: pointer; }
 .arch-node:focus { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 16px; }
 .arch-modal { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center;
@@ -209,7 +209,7 @@ function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg
 # HELPER HTML
 # ---------------------------------------------------------------------------
 def _tree_html(path: Path, base: Path) -> str:
-    """Recursieve file-tree als HTML."""
+    """Recursive file tree as HTML."""
     out: list[str] = []
     try:
         entries = sorted(path.iterdir(), key=lambda p: (p.is_file(), p.name.lower()))
@@ -235,7 +235,7 @@ def _tree_html(path: Path, base: Path) -> str:
 def _vault_notes_html() -> str:
     out: list[str] = []
     if not VAULT.is_dir():
-        return '<div class="file">⚠ vault niet bereikbaar</div>'
+        return '<div class="file">⚠ vault not reachable</div>'
     for p in sorted(VAULT.iterdir()):
         if p.name.startswith("."):
             continue
@@ -259,7 +259,7 @@ def _arch_block(title: str, subs: list[str], cls: str = "") -> str:
     return f"<div class='arch-block {{cls}}'><h4>{html.escape(title)}</h4><div class='sub'>{sub}</div></div>"
 
 
-# --- Architectuur: SVG-flow-diagram met echte bezier-pijlen (Apple design) ---
+# --- Architecture: SVG flow diagram with real bezier arrows (Apple design) ---
 ARCH_SVG = """<svg id="arch" viewBox="0 0 1000 860" style="width:100%;height:auto" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="gCore" x1="0" y1="0" x2="1" y2="1">
@@ -304,35 +304,35 @@ ARCH_SVG = """<svg id="arch" viewBox="0 0 1000 860" style="width:100%;height:aut
   .arch-cap{font:600 11px -apple-system,system-ui,sans-serif;fill:#86868b;letter-spacing:.08em}
   </style>
 
-  <!-- ===== Laag 1 — DATA ===== -->
+  <!-- ===== LAYER 1 — DATA ===== -->
   <g class="arch-cap"><text x="30" y="30">LAAG 1 · DATA</text></g>
   {n_server}{n_scrape}
 
-  <!-- ===== Laag 2 — SIGNALEN / UITBREIDINGEN ===== -->
+  <!-- ===== LAYER 2 — SIGNALS / EXTENSIONS ===== -->
   <g class="arch-cap"><text x="30" y="180">LAAG 2 · SIGNALEN</text></g>
   {n_speech}{n_reports}{n_alerts}
   {n_bottleneck}{n_regional}{n_regime}
 
-  <!-- ===== Laag 3 — FUSIE ===== -->
+  <!-- ===== LAYER 3 — FUSION ===== -->
   <g class="arch-cap"><text x="30" y="360">LAAG 3 · FUSIE</text></g>
   {n_fusion}
 
-  <!-- ===== Laag 4 — BESLUIT + RISICO ===== -->
+  <!-- ===== LAYER 4 — DECISION + RISK ===== -->
   <g class="arch-cap"><text x="30" y="520">LAAG 4 · BESLUIT + RISICO</text></g>
   {n_rl}{n_mc}{n_risk}
 
-  <!-- ===== Laag 5 — ACTIE ===== -->
+  <!-- ===== LAYER 5 — ACTION ===== -->
   <g class="arch-cap"><text x="30" y="700">LAAG 5 · ACTIE</text></g>
   {n_action}{n_exec}
 
-  <!-- ===== EDGES (pijlen tussen genodeerde centra) ===== -->
+  <!-- ===== EDGES (arrows between node centers) ===== -->
   <!-- server -> scrape -->
   <path class="arch-edge data" d="{e_server_scrape}" marker-end="url(#arrowData)"/>
-  <!-- scrape -> signalen -->
+  <!-- scrape -> signals -->
   <path class="arch-edge data" d="{e_scrape_speech}" marker-end="url(#arrowData)"/>
   <path class="arch-edge data" d="{e_scrape_reports}" marker-end="url(#arrowData)"/>
   <path class="arch-edge data" d="{e_scrape_alerts}" marker-end="url(#arrowData)"/>
-  <!-- signalen -> fusion (uitbreidingen GENTEGREERD) -->
+  <!-- signals -> fusion (extensions INTEGRATED) -->
   <path class="arch-edge" d="{e_speech_fusion}" marker-end="url(#arrow)"/>
   <path class="arch-edge" d="{e_reports_fusion}" marker-end="url(#arrow)"/>
   <path class="arch-edge ghost" d="{e_alerts_fusion}" marker-end="url(#arrow)"/>
@@ -344,7 +344,7 @@ ARCH_SVG = """<svg id="arch" viewBox="0 0 1000 860" style="width:100%;height:aut
   <!-- rl / mc -> risk -->
   <path class="arch-edge" d="{e_rl_risk}" marker-end="url(#arrow)"/>
   <path class="arch-edge risk" d="{e_mc_risk}" marker-end="url(#arrowRisk)"/>
-  <!-- risk -> actie -->
+  <!-- risk -> action -->
   <path class="arch-edge risk" d="{e_risk_action}" marker-end="url(#arrowRisk)"/>
   <path class="arch-edge" d="{e_action_exec}" marker-end="url(#arrow)"/>
 </svg>"""
@@ -365,155 +365,155 @@ def _node(id, x, y, w, h, title, subs, cls="", grad="gData"):
 
 
 def _edge(x1, y1, x2, y2, cx=0.5, cy=0.35):
-    """Bezier-curve van onderkant node1 naar bovenkant node2 (met echte pijl)."""
+    """Bezier curve from the bottom of node1 to the top of node2 (with a real arrow)."""
     return f"M {x1} {y1} C {x1} {y1+(y2-y1)*cy}, {x2} {y2-(y2-y1)*cy}, {x2} {y2}"
 
 
-# --- Uitleg per component (voor de klikbare modal) ---
+# --- Per-component explanation (for the clickable modal) ---
 COMPONENT_INFO = {
     "server": {
         "titel": "24/7 Server",
-        "rol": "De centrale infrastructuur die alles draait.",
-        "wat": "Een altijd-aan server die de webscraping, de AI-agenten, de "
-               "risico-engine en de executie orchestreert. Plant taken in via een "
-               "scheduler en houdt de hele keten draaiend.",
-        "in": "— (startpunt)",
-        "uit": "gestructureerde webscraping · scheduling",
+        "rol": "The central infrastructure that runs everything.",
+        "wat": "An always-on server that orchestrates the webscraping, the AI agents, "
+               "the risk engine and the execution. Schedules tasks via a scheduler "
+               "and keeps the whole chain running.",
+        "in": "— (starting point)",
+        "uit": "structured webscraping · scheduling",
         "code": "hermes_bot/pipeline.py",
     },
     "scrape": {
-        "titel": "Gestructureerde Webscraping",
-        "rol": "Haalt ruwe informatie van het web.",
-        "wat": "Scrapet live speeches van CEO's en landsleiders, bedrijfsrapporten, "
-               "overheidsuitgaven, nieuwsberichten en marktdata. Structureert dit "
-               "naar bruikbare signalen voor de rest van de keten.",
-        "in": "24/7 server · web-bronnen",
-        "uit": "speech · reports · alerts · marktdata",
+        "titel": "Structured Webscraping",
+        "rol": "Fetches raw information from the web.",
+        "wat": "Scrapes live speeches from CEOs and world leaders, company reports, "
+               "government spending, news items and market data. Structures this "
+               "into usable signals for the rest of the chain.",
+        "in": "24/7 server · web sources",
+        "uit": "speech · reports · alerts · market data",
         "code": "hermes_bot/data/scraper.py",
     },
     "speech": {
         "titel": "Speech (audio + video)",
-        "rol": "Analyseert toespraken van CEO's en landsleiders.",
-        "wat": "Splitst spraak op in audio en video. Audio levert tekst (transcriptie), "
-               "emotie, pauzes, volume en pitch. Video levert gezichtsuitdrukking, "
-               "bewegingen en lichaamstaal. Gebruikt opensource-modellen "
+        "rol": "Analyses speeches from CEOs and world leaders.",
+        "wat": "Splits speech into audio and video. Audio provides text (transcription), "
+               "emotion, pauses, volume and pitch. Video provides facial expression, "
+               "movements and body language. Uses open-source models "
                "(faster-whisper, DeepFace, MediaPipe, openSMILE).",
         "in": "webscraping → speech",
-        "uit": "tekst · emotie · prosodie · publiek → fusion",
+        "uit": "text · emotion · prosody · audience → fusion",
         "code": "hermes_bot/signals/audio.py · video.py",
     },
     "reports": {
         "titel": "Reports & Alerts",
-        "rol": "Verwerkt bedrijfs- en overheidsrapporten.",
-        "wat": "Leest kwartaalcijfers, overheidsuitgaven en onafhankelijke rapportage. "
-               "Een AI-agent destilleert koersveranderingen en staatsinvesteringen "
-               "hieruit als input voor het fusion-model.",
+        "rol": "Processes company and government reports.",
+        "wat": "Reads quarterly results, government spending and independent reporting. "
+               "An AI agent distils price changes and state investments "
+               "from this as input for the fusion model.",
         "in": "webscraping → reports",
-        "uit": "koersveranderingen · staatsinvesteringen → fusion",
+        "uit": "price changes · state investments → fusion",
         "code": "hermes_bot/signals/textual.py",
     },
     "alerts": {
-        "titel": "Nieuws & Point-loops",
-        "rol": "Vangt nieuwsberichten en alerts op.",
-        "wat": "Monitort nieuwsfeeds en point-loops (herhaalde datapunten) voor "
-               "actuele gebeurtenissen die de markt kunnen raken.",
+        "titel": "News & Point loops",
+        "rol": "Catches news items and alerts.",
+        "wat": "Monitors news feeds and point loops (repeated data points) for "
+               "current events that could affect the market.",
         "in": "webscraping → alerts",
-        "uit": "nieuws-signalen → fusion",
+        "uit": "news signals → fusion",
         "code": "hermes_bot/data/scraper.py",
     },
     "bottleneck": {
         "titel": "B2B Bottleneck",
-        "rol": "Rangschikt bedrijven op knelpunten in de toeleveringsketen.",
-        "wat": "Een agent beoordeelt welke bedrijven in een 'bottleneck' zitten "
-               "(vraag > aanbod, supply-chain-knelpunten) en geeft een rating "
-               "door aan het fusion-model als extra signaal.",
+        "rol": "Ranks companies on supply-chain bottlenecks.",
+        "wat": "An agent assesses which companies sit in a 'bottleneck' "
+               "(demand > supply, supply-chain constraints) and passes a rating "
+               "to the fusion model as an extra signal.",
         "in": "webscraping → reports",
-        "uit": "bottleneck-ratings → fusion",
+        "uit": "bottleneck ratings → fusion",
         "code": "hermes_bot/expansions/__init__.py",
     },
     "regional": {
-        "titel": "Regionale Scores",
-        "rol": "Scoort regio's op veiligheid, tevredenheid en economie.",
-        "wat": "Berekent per regio scores voor veiligheid, tevredenheid, sociale "
-               "zekerheid en bedrijfseconomische veranderingen. Deze context helpt "
-               "het fusion-model om regionale risico's mee te wegen.",
+        "titel": "Regional Scores",
+        "rol": "Scores regions on safety, satisfaction and economy.",
+        "wat": "Computes per-region scores for safety, satisfaction, social "
+               "security and business-economic changes. This context helps "
+               "the fusion model weigh regional risks.",
         "in": "webscraping → reports",
-        "uit": "regionale scores → fusion",
+        "uit": "regional scores → fusion",
         "code": "hermes_bot/expansions/__init__.py",
     },
     "regime": {
         "titel": "Regime / Orderflow",
-        "rol": "Bepaalt de markttoestand (bull, crash, herstel).",
-        "wat": "Detecteert het marktregime (normal, elevated, stressed, crash, "
-               "recovery) en volgt orderflow/positionering (bv. COT). Dit is een "
-               "belangrijke input voor de risico-engine.",
-        "in": "marktdata · orderflow",
-        "uit": "regime-label → fusion + risico-engine",
+        "rol": "Determines the market state (bull, crash, recovery).",
+        "wat": "Detects the market regime (normal, elevated, stressed, crash, "
+               "recovery) and tracks orderflow/positioning (e.g. COT). This is an "
+               "important input for the risk engine.",
+        "in": "market data · orderflow",
+        "uit": "regime label → fusion + risk engine",
         "code": "hermes_bot/expansions/__init__.py",
     },
     "fusion": {
         "titel": "Fusion Model",
-        "rol": "Combineert alle signalen tot één beslissing.",
-        "wat": "Weegt alle inputs (speech, reports, alerts, bottleneck, regionale "
-               "scores, regime) samen tot een kwaliteitsscore, zekerheid en emotie. "
-               "Dit is de 'wat te kopen'-laag van de architectuur.",
-        "in": "alle signalen + uitbreidingen",
-        "uit": "kwaliteit · zekerheid · emotie → RL-fusion",
+        "rol": "Combines all signals into one decision.",
+        "wat": "Weights all inputs (speech, reports, alerts, bottleneck, regional "
+               "scores, regime) into a quality score, certainty and emotion. "
+               "This is the 'what to buy' layer of the architecture.",
+        "in": "all signals + extensions",
+        "uit": "quality · certainty · emotion → RL fusion",
         "code": "hermes_bot/fusion/__init__.py",
     },
     "rl": {
         "titel": "RL-Fusion Model",
-        "rol": "Stelt posities voor (buy/sell/hold/hedge).",
-        "wat": "Neemt de fusion-output en stelt een gewenste positie voor. De "
-               "risico-engine keurt dit goed of bij — RL stelt voor, Risk beslist.",
-        "in": "fusion-output",
-        "uit": "voorgestelde positie → risico-engine",
+        "rol": "Proposes positions (buy/sell/hold/hedge).",
+        "wat": "Takes the fusion output and proposes a desired position. The "
+               "risk engine approves or adjusts it — RL proposes, Risk decides.",
+        "in": "fusion output",
+        "uit": "proposed position → risk engine",
         "code": "hermes_bot/agents/rl/__init__.py",
     },
     "mc": {
         "titel": "Monte Carlo",
-        "rol": "Simuleert duizenden marktpaden voor risico.",
-        "wat": "Bootst per-dag marktpaden om VaR95, Expected Shortfall (ES95) en "
-               "crash-kans te schatten. Dit voedt de risico-engine met "
-               "staartrisico-informatie.",
-        "in": "historische returns",
-        "uit": "VaR95 · ES95 · crash-kans → risico-engine",
+        "rol": "Simulates thousands of market paths for risk.",
+        "wat": "Bootstraps per-day market paths to estimate VaR95, Expected Shortfall (ES95) and "
+               "crash probability. This feeds the risk engine with "
+               "tail-risk information.",
+        "in": "historical returns",
+        "uit": "VaR95 · ES95 · crash probability → risk engine",
         "code": "hermes_bot/risk_v2/montecarlo.py",
     },
     "risk": {
         "titel": "Risk Engine v2.1",
-        "rol": "Bepaalt hoeveel risico we mogen nemen.",
-        "wat": "De adaptieve risico-engine met drie lagen: Strategic (regime), "
-               "Tactical (vol/drawdown/correlatie) en Emergency Brake (flash-crash). "
-               "Een recovery-engine bouwt exposure weer op na herstel. Dit is de "
-               "'hoeveel risico'-laag.",
-        "in": "RL-voorstel · Monte Carlo · regime",
-        "uit": "risk-budget / exposure → output-actie",
+        "rol": "Determines how much risk we may take.",
+        "wat": "The adaptive risk engine with three layers: Strategic (regime), "
+               "Tactical (vol/drawdown/correlation) and Emergency Brake (flash crash). "
+               "A recovery engine rebuilds exposure after stabilization. This is the "
+               "'how much risk' layer.",
+        "in": "RL proposal · Monte Carlo · regime",
+        "uit": "risk budget / exposure → output action",
         "code": "hermes_bot/risk_v2_1/__init__.py",
     },
     "action": {
-        "titel": "Output Actie",
-        "rol": "Zet het risicobudget om in een concrete portefeuille.",
-        "wat": "Verdeelt het goedgekeurde risicobudget over aandelen, ETF's, "
-               "obligaties en cash. Bepaalt de uiteindelijke posities.",
-        "in": "risk-budget · RL-voorstel",
-        "uit": "posities → executie",
+        "titel": "Output Action",
+        "rol": "Turns the risk budget into a concrete portfolio.",
+        "wat": "Allocates the approved risk budget across stocks, ETFs, "
+               "bonds and cash. Determines the final positions.",
+        "in": "risk budget · RL proposal",
+        "uit": "positions → execution",
         "code": "hermes_bot/portfolio/__init__.py",
     },
     "exec": {
-        "titel": "Executie",
-        "rol": "Voert de posities daadwerkelijk uit.",
-        "wat": "Plaatst orders via een paper-broker (fail-closed: bij twijfel geen "
-               "order) of een live-broker. Logt elke transactie.",
-        "in": "posities van output-actie",
-        "uit": "orders · transactielog",
+        "titel": "Execution",
+        "rol": "Actually executes the positions.",
+        "wat": "Places orders via a paper broker (fail-closed: on doubt no "
+               "order) or a live broker. Logs every transaction.",
+        "in": "positions from output action",
+        "uit": "orders · transaction log",
         "code": "hermes_bot/execution/__init__.py",
     },
 }
 
 
 def _arch_modal_html() -> str:
-    """Kleine modal (niet fullscreen) met uitleg over een component."""
+    """Small modal (not fullscreen) with an explanation of a component."""
     return """
 <div id="arch-modal" class="arch-modal" role="dialog" aria-modal="true" aria-hidden="true"
      onclick="if(event.target===this)archClose()">
@@ -626,9 +626,9 @@ def _architecture_html() -> str:
 
 def _backtest_html() -> str:
     return """
-<h2>📊 Backtest-tool</h2>
-<p>Draai een markt-backtest die de <b>risico-engine</b> (vol-targeting, drawdown-guard)
-doorloopt en vergelijkt met buy-and-hold. Echte marktdata via yfinance (gratis).</p>
+<h2>📊 Backtest tool</h2>
+<p>Run a market backtest that goes through the <b>risk engine</b> (vol-targeting, drawdown guard)
+and compares against buy-and-hold. Real market data via yfinance (free).</p>
 <div class="card">
   <form id="bt-form" class="form-row">
     <input name="symbol" value="SPY" placeholder="Ticker" list="symlist">
@@ -637,14 +637,14 @@ doorloopt en vergelijkt met buy-and-hold. Echte marktdata via yfinance (gratis).
       <option>NVDA</option><option>JPM</option><option>EFA</option><option>AGG</option>
     </datalist>
     <select name="period">
-      <option value="1y">1 jaar</option>
-      <option value="2y" selected>2 jaar</option>
-      <option value="3y">3 jaar</option>
-      <option value="5y">5 jaar</option>
+      <option value="1y">1 year</option>
+      <option value="2y" selected>2 years</option>
+      <option value="3y">3 years</option>
+      <option value="5y">5 years</option>
     </select>
     <label style="font-size:14px;color:var(--muted)">Vol-target
       <input name="vol_target" value="0.125" type="number" step="0.025" style="width:90px"></label>
-    <button type="submit">▶ Draai backtest</button>
+    <button type="submit">▶ Run backtest</button>
   </form>
 </div>
 <div id="bt-result" aria-live="polite"></div>
@@ -653,7 +653,7 @@ doorloopt en vergelijkt met buy-and-hold. Echte marktdata via yfinance (gratis).
 document.getElementById('bt-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const el = document.getElementById('bt-result');
-  el.innerHTML = '<p><span class="spin"></span> Backtesting op de server… (kan ~5s duren)</p>';
+  el.innerHTML = '<p><span class="spin"></span> Backtesting on the server… (takes ~5s)</p>';
   const f = e.target;
   const qs = new URLSearchParams({
     symbol: f.symbol.value || 'SPY',
@@ -665,7 +665,7 @@ document.getElementById('bt-form').addEventListener('submit', async (e) => {
     const text = await r.text();
     el.innerHTML = text;
   } catch (err) {
-    el.innerHTML = '<div class="card"><p style="color:var(--danger)">Fout: ' + htmlEscape(String(err)) + '</p></div>';
+    el.innerHTML = '<div class="card"><p style="color:var(--danger)">Error: ' + htmlEscape(String(err)) + '</p></div>';
   }
 });
 
@@ -710,15 +710,15 @@ def _backtest_result_html(data: dict) -> str:
 </svg>
 </div>
 <div class="chart-legend">
-  <span class="legend-item strategy"><span class="swatch"></span>Strategie (vol-target)</span>
+  <span class="legend-item strategy"><span class="swatch"></span>Strategy (vol-target)</span>
   <span class="legend-item bench"><span class="swatch"></span>Buy-and-hold</span>
 </div>"""
 
     return f"""
 <div class="card">
-  <h3>Resultaat — {html.escape(data['symbol'])} ({html.escape(data['period'])})</h3>
+  <h3>Result — {html.escape(data['symbol'])} ({html.escape(data['period'])})</h3>
   <div class="kpis">
-    <div class="kpi {tr_kpi}"><div class="label">Totaal rendement</div><div class="value">{pct(tr)}</div></div>
+    <div class="kpi {tr_kpi}"><div class="label">Total return</div><div class="value">{pct(tr)}</div></div>
     <div class="kpi neutral"><div class="label">Buy-and-hold</div><div class="value">{pct(bench)}</div></div>
     <div class="kpi bad"><div class="label">Max drawdown</div><div class="value">{pct(dd)}</div></div>
     <div class="kpi neutral"><div class="label">Sharpe</div><div class="value">{data['sharpe']}</div></div>
@@ -726,45 +726,45 @@ def _backtest_result_html(data: dict) -> str:
     <div class="kpi {'good' if data['win_rate']>=0.5 else 'neutral'}"><div class="label">Win-rate</div><div class="value">{data['win_rate']*100:.0f}%</div></div>
   </div>
   <p style="margin-top:12px">
-    Strategie sloten op <b>€{data['final_capital']:,.0f}</b> van {data['initial_capital']:,.0f} startkapitaal.
-    De lagere max-drawdown (vs benchmark) laat crashweerstand zien; de strategie is
-    conservatiever maar beperkt verliezen in crashes.
+    The strategy ended at <b>€{data['final_capital']:,.0f}</b> from {data['initial_capital']:,.0f} starting capital.
+    The lower max-drawdown (vs benchmark) shows crash resilience; the strategy is
+    more conservative but limits losses in crashes.
   </p>
 </div>
 <div class="card">
-  <h3>Equity-curve (Strategie vs Buy-and-hold)</h3>
+  <h3>Equity curve (Strategy vs Buy-and-hold)</h3>
   {svg}
-  <p style="font-size:12px;color:var(--muted)">{len(ts)} datapunten geplot. Download zelf via knop linksonder in de nav.</p>
+  <p style="font-size:12px;color:var(--muted)">{len(ts)} data points plotted. Download via the button in the nav.</p>
 </div>
 """
 
 
 def _control_panel_html() -> str:
-    """Backtest Control Panel — configuratie/experiment-laag bovenop de v2.1-engine."""
+    """Backtest Control Panel — config/experiment layer on top of the v2.1 engine."""
     return """
 <h2>🎛️ Backtest Control Panel</h2>
-<p>Een dunne experimenteerknop bovenop de bestaande backtester. Stel inputs in,
-draai één backtest of vergelijk 2–5 configuraties — de engine zelf wordt niet gewijzigd.</p>
+<p>A thin experiment layer on top of the existing backtester. Set inputs,
+run one backtest or compare 2–5 configurations — the engine itself is unchanged.</p>
 
 <div class="card">
-  <h3>Configuratie</h3>
+  <h3>Configuration</h3>
   <form id="cp-form" class="form-row" style="align-items:stretch;flex-direction:column;gap:12px">
     <div class="form-row">
       <label style="font-size:14px;color:var(--muted)">Run type
         <select id="cp-rule" name="rule" onchange="cpToggleMode()">
-          <option value="single" selected>Eén backtest</option>
-          <option value="compare">Vergelijk (2–5 configs)</option>
+          <option value="single" selected>Single backtest</option>
+          <option value="compare">Compare (2–5 configs)</option>
         </select></label>
       <label style="font-size:14px;color:var(--muted)">Asset
         <select name="asset" id="cp-asset" list="syms"><option value="SPY">SPY</option>
           <option>QQQ</option><option>IWM</option><option>AAPL</option><option>MSFT</option>
           <option>NVDA</option><option>EFA</option><option>AGG</option></select></label>
-      <label style="font-size:14px;color:var(--muted)">Jaren
+      <label style="font-size:14px;color:var(--muted)">Years
         <input name="years" value="3" type="number" step="0.5" min="0.5" style="width:90px"></label>
       <label style="font-size:14px;color:var(--muted)">Vol-target
         <input name="vol" value="0.125" type="number" step="0.025" min="0.02" max="0.5" style="width:96px"></label>
-      <label style="font-size:14px;color:var(--muted)">Kosten
-        <select name="costs"><option value="1">AN</option><option value="0">UIT</option></select></label>
+      <label style="font-size:14px;color:var(--muted)">Costs
+        <select name="costs"><option value="1">ON</option><option value="0">OFF</option></select></label>
     </div>
     <div class="form-row" style="font-size:13px;color:var(--muted);gap:16px">
       <label><input type="checkbox" name="opp" checked> Opportunity Score</label>
@@ -773,16 +773,16 @@ draai één backtest of vergelijk 2–5 configuraties — de engine zelf wordt n
       <label><input type="checkbox" name="risk" checked> Risk Engine</label>
     </div>
     <div id="cp-compare" style="display:none">
-      <h3 style="margin-top:4px">Configuraties om te vergelijken</h3>
+      <h3 style="margin-top:4px">Configurations to compare</h3>
       <div id="cp-rows"></div>
       <div class="form-row">
-        <button type="button" class="secondary" onclick="cpAddRow()">+ Voeg config toe</button>
+        <button type="button" class="secondary" onclick="cpAddRow()">+ Add config</button>
       </div>
     </div>
     <div class="form-row">
-      <button type="submit">▶ Draai backtest</button>
+      <button type="submit">▶ Run backtest</button>
       <button type="button" class="secondary" onclick="cpQuick()">⚡ Quick: vol-targets</button>
-      <button type="button" class="secondary" onclick="cpQuickFull()">⚡ Full vs componenten</button>
+      <button type="button" class="secondary" onclick="cpQuickFull()">⚡ Full vs components</button>
     </div>
   </form>
 </div>
@@ -814,7 +814,7 @@ function cpQuick(){
   document.getElementById('cp-rule').value='compare'; cpToggleMode();
 }
 function cpQuickFull(){
-  // Reset en bouw 'full vs componenten' (elk alleen de bestaande toggle verschilt).
+  // Reset and build 'full vs components' (each differs only in an existing toggle).
   document.getElementById('cp-rows').innerHTML=''; cpRowCount=0;
   cpAddRow('Full v2.1','SPY','0.125');
   document.getElementById('cp-rule').value='compare'; cpToggleMode();
@@ -824,7 +824,7 @@ document.getElementById('cp-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = e.target;
   const el = document.getElementById('cp-result');
-  el.innerHTML = '<p><span class="spin"></span> Backtesting op de server… (kan enkele seconden duren)</p>';
+  el.innerHTML = '<p><span class="spin"></span> Backtesting on the server… (takes a few seconds)</p>';
   const rule = f.rule.value;
   const body = {
     rule,
@@ -851,7 +851,7 @@ document.getElementById('cp-form').addEventListener('submit', async (e) => {
     if(!r.ok) throw new Error(text);
     el.innerHTML = text;
   } catch(err){
-    el.innerHTML = '<div class="card"><p style="color:var(--danger)">Fout: ' + String(err).replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])) + '</p></div>';
+    el.innerHTML = '<div class="card"><p style="color:var(--danger)">Error: ' + String(err).replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])) + '</p></div>';
   }
 });
 </script>
@@ -859,9 +859,9 @@ document.getElementById('cp-form').addEventListener('submit', async (e) => {
 
 
 def _run_control_panel_(body: dict) -> str:
-    """Server-kant: verwerk de Control Panel JSON-request naar HTML.
+    """Server side: process the Control Panel JSON request into HTML.
 
-    Bouwt BacktestConfig(s) uit de form-invoer en roept de bestaande v2.1-engine.
+    Builds BacktestConfig(s) from the form input and calls the existing v2.1 engine.
     """
     from hermes_bot.control_panel import (
         BacktestConfig,
@@ -883,7 +883,7 @@ def _run_control_panel_(body: dict) -> str:
     if rule == "compare":
         rows = body.get("rows") or []
         if not 2 <= len(rows) <= 5:
-            return '<div class="card"><p style="color:var(--danger)">Kies 2–5 configuraties.</p></div>'
+            return '<div class="card"><p style="color:var(--danger)">Choose 2–5 configurations.</p></div>'
         cfgs = [BacktestConfig(asset=r["asset"], vol_target=float(r["vol"]),
                                label=r["label"], run_type="compare", **base) for r in rows]
         data = run_compare(cfgs)
@@ -920,32 +920,32 @@ def _run_control_panel_(body: dict) -> str:
 
 def _download_html() -> str:
     return """
-<h2>⬇️ Download &amp; GitHub-export</h2>
-<p>Download het hele project als <b>.zip</b> — dit werkt op <b>Windows, macOS, iPad en elke browser</b>.
-De zip is klaar om naar GitHub te uploaden (zonder .venv, caches of secrets).</p>
+<h2>⬇️ Download &amp; GitHub export</h2>
+<p>Download the whole project as a <b>.zip</b> — works on <b>Windows, macOS, iPad and any browser</b>.
+The zip is ready to upload to GitHub (without .venv, caches or secrets).</p>
 <div class="card">
   <div class="dl-panel">
     <button class="secondary" onclick="location.href='/getzip'">⬇️ Download project (.zip)</button>
     <span class="dl-size">Excl. .venv / caches / .env</span>
-    <button class="secondary" onclick="location.href='/github'">▶ GitHub-instructies</button>
+    <button class="secondary" onclick="location.href='/github'">▶ GitHub instructions</button>
   </div>
 </div>
 <div class="card" style="margin-top:18px">
-  <h3>GitHub push (vanaf deze server)</h3>
+  <h3>GitHub push (from this server)</h3>
   <pre><code>cd ~/trading-bot
 git init -b main
 git add -A && git commit -m "Initial Hermes trading bot"
-git remote add origin https://github.com/JOUW-NAAM/hermes-trading-bot.git
+git remote add origin https://github.com/YOUR-NAME/hermes-trading-bot.git
 git push -u origin main</code></pre>
-  <p style="font-size:13px">Voor iPad: gebruik de knop hierboven om de zip te downloaden, open de
-  <b>GitHub-app</b>, maak een repo en upload de bestanden. Zie de
-  <a href="/github">GitHub-instructies</a> voor de volledige stappen.</p>
+  <p style="font-size:13px">For iPad: use the button above to download the zip, open the
+  <b>GitHub app</b>, create a repo and upload the files. See the
+  <a href="/github">GitHub instructions</a> for the full steps.</p>
 </div>
 """
 
 
 def _code_view_html(rel: str, content: str) -> str:
-    # Toon code met regelnummers.
+    # Show code with line numbers.
     lines = content.splitlines() if content else []
     body = []
     for i, ln in enumerate(lines, 1):
@@ -965,9 +965,9 @@ def _page(title: str, content: str, active: str = "") -> str:
         ("/panel", "Panel", "Panel"),
         ("/backtest", "Backtest", "Backtest"),
         ("/download", "Download", "Download"),
-        ("/architectuur", "Architectuur", "Architectuur"),
+        ("/architectuur", "Architecture", "Architecture"),
         ("/code", "Code", "Code"),
-        ("/vault", "Noten", "Noten"),
+        ("/vault", "Notes", "Notes"),
     ]
     nav = "".join(
         f'<a href="{href}" class="{"active" if a==active else ""}">{label}</a>'
@@ -1012,21 +1012,21 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/":
             content = (
-                "<h2>Welkom</h2>"
-                "<p>Modulaire multi-asset AI-tradingbot die <b>winst</b> nastreeft met weerstand tegen "
-                "<b>marktcrashes</b>. Verken de architectuur, draai een backtest, bekijk de code/noten, "
-                "of download het project.</p>"
+                "<h2>Welcome</h2>"
+                "<p>A modular multi-asset AI trading bot that pursues <b>good returns</b> with resilience against "
+                "<b>market crashes</b>. Explore the architecture, run a backtest, browse the code/notes, "
+                "or download the project.</p>"
                 "<div class='kpis'>"
-                "<div class='kpi good'><div class='label'>Doel</div><div class='value' style='font-size:16px'>goede winst</div></div>"
-                "<div class='kpi neutral'><div class='label'>Weerstand</div><div class='value' style='font-size:16px'>crash-bestendig</div></div>"
-                "<div class='kpi neutral'><div class='label'>Multi-asset</div><div class='value' style='font-size:16px'>aandelen/ETF's/obligaties</div></div>"
-                "<div class='kpi neutral'><div class='label'>Executie</div><div class='value' style='font-size:16px'>paper → live</div></div>"
+                "<div class='kpi good'><div class='label'>Goal</div><div class='value' style='font-size:16px'>good returns</div></div>"
+                "<div class='kpi neutral'><div class='label'>Resilience</div><div class='value' style='font-size:16px'>crash-resistant</div></div>"
+                "<div class='kpi neutral'><div class='label'>Multi-asset</div><div class='value' style='font-size:16px'>stocks/ETFs/bonds</div></div>"
+                "<div class='kpi neutral'><div class='label'>Execution</div><div class='value' style='font-size:16px'>paper → live</div></div>"
                 "</div>"
-                "<div class='card'><h3>Start hier</h3>"
-                "<p>• <a href='/backtest'>Verken de backtest-tool</a> — zie hoe de risico-engine crashes beperkt.<br>"
-                "• <a href='/architectuur'>Bekijk het architectuur-diagram</a> — de 7 lagen.<br>"
-                "• <a href='/download'>Download of exporteer naar GitHub</a>.<br>"
-                "• <a href='/run'>Draai de demo-pipeline</a>.</p></div>"
+                "<div class='card'><h3>Start here</h3>"
+                "<p>• <a href='/backtest'>Explore the backtest tool</a> — see how the risk engine limits crashes.<br>"
+                "• <a href='/architectuur'>View the architecture diagram</a> — the 7 layers.<br>"
+                "• <a href='/download'>Download or export to GitHub</a>.<br>"
+                "• <a href='/run'>Run the demo pipeline</a>.</p></div>"
             )
             self._send(self._page("Dashboard", content, "Dash"))
         elif path == "/panel":
@@ -1037,10 +1037,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send(self._page("Download", _download_html(), "Download"))
         elif path == "/github":
             from hermes_bot.export_zip import build_github_instructions
-            content = f"<h2>GitHub-instructies</h2><pre>{html.escape(build_github_instructions())}</pre>"
+            content = f"<h2>GitHub instructions</h2><pre>{html.escape(build_github_instructions())}</pre>"
             self._send(self._page("GitHub", content, "Download"))
         elif path == "/architectuur":
-            self._send(self._page("Architectuur", "<h2>🏗️ Architectuur</h2>" + _architecture_html(), "Architectuur"))
+            self._send(self._page("Architecture", "<h2>🏗️ Architecture</h2>" + _architecture_html(), "Architecture"))
         elif path == "/code":
             rel = qs.get("path", [""])[0]
             target = (ROOT / rel).resolve()
@@ -1058,17 +1058,17 @@ class Handler(BaseHTTPRequestHandler):
             if target.is_file() and VAULT in target.parents:
                 content = f"<h2>📝 {html.escape(target.stem)}</h2>" + _render_md(target.read_text())
             else:
-                content = "<h2>Obsidian-noten</h2>" + _vault_notes_html()
-            self._send(self._page("Noten", content, "Noten"))
+                content = "<h2>Obsidian notes</h2>" + _vault_notes_html()
+            self._send(self._page("Notes", content, "Notes"))
         elif path == "/run":
             content = (
                 "<h2>Run demo</h2>"
-                "<div class='card'><form method='POST' action='/run'><button>▶ Draai demo-pipeline</button></form>"
-                "<p style='font-size:13px;margin-top:8px'>Ook: <code>uv run pytest</code> en <code>uv run python -m hermes_bot.demo</code></p></div>"
+                "<div class='card'><form method='POST' action='/run'><button>▶ Run demo pipeline</button></form>"
+                "<p style='font-size:13px;margin-top:8px'>Also: <code>uv run pytest</code> and <code>uv run python -m hermes_bot.demo</code></p></div>"
             )
             self._send(self._page("Demo", content, "Dash"))
         elif path == "/getzip":
-            # Download het project als .zip (voor GitHub-export, ook op iPad).
+            # Download the project as a .zip (for GitHub export, also on iPad).
             try:
                 from hermes_bot.export_zip import build_zip_bytes
                 data = build_zip_bytes()
@@ -1094,9 +1094,9 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 self._send(_backtest_result_html(data))
             except Exception as e:  # noqa: BLE001
-                self._send(f'<div class="card"><p style="color:var(--danger)">Fout: {html.escape(str(e))}</p></div>')
+                self._send(f'<div class="card"><p style="color:var(--danger)">Error: {html.escape(str(e))}</p></div>')
         else:
-            content = "<h2>404</h2><p>Pagina niet gevonden.</p><a href='/'>← Terug</a>"
+            content = "<h2>404</h2><p>Page not found.</p><a href='/'>← Back</a>"
             self._send(self._page("404", content))
 
     def do_POST(self) -> None:  # noqa: N802
@@ -1109,7 +1109,7 @@ class Handler(BaseHTTPRequestHandler):
                 out = _run_control_panel_(body)
                 self._send(out)
             except Exception as e:  # noqa: BLE001
-                self._send(f'<div class="card"><p style="color:var(--danger)">Fout: {html.escape(str(e))}</p></div>')
+                self._send(f'<div class="card"><p style="color:var(--danger)">Error: {html.escape(str(e))}</p></div>')
             return
         if self.path == "/run":
             try:
@@ -1118,16 +1118,16 @@ class Handler(BaseHTTPRequestHandler):
                     cwd=str(ROOT), capture_output=True, text=True, timeout=90,
                 )
                 out = r.stdout or r.stderr
-                content = f"<h2>Demo-output</h2><pre><code>{html.escape(out)}</code></pre>"
+                content = f"<h2>Demo output</h2><pre><code>{html.escape(out)}</code></pre>"
             except Exception as e:  # noqa: BLE001
-                content = f"<h2>Fout</h2><pre><code>{html.escape(str(e))}</code></pre>"
+                content = f"<h2>Error</h2><pre><code>{html.escape(str(e))}</code></pre>"
             self._send(self._page("Demo", content, "Dash"))
         else:
             self._send("<h2>404</h2>")
 
 
 def main() -> None:
-    print(f"Hermes trading-bot web-interface op http://localhost:{PORT}")
+    print(f"Hermes trading-bot web interface at http://localhost:{PORT}")
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
 
 

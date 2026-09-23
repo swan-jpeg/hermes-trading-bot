@@ -1,41 +1,41 @@
 @echo off
-REM Hermes Trading Bot — Windows installatie-script
-REM Vereist: Python 3.11+ en uv (https://docs.astral.sh/uv/)
+REM Hermes Trading Bot — Windows install script
+REM Requires: Python 3.11+ and uv (https://docs.astral.sh/uv/)
 echo.
-echo === Hermes Trading Bot — Windows installatie ===
+echo === Hermes Trading Bot — Windows install ===
 echo.
 
-REM 1. Controleer uv
+REM 1. Check uv
 where uv >nul 2>nul
 if errorlevel 1 (
-    echo [FOUT] uv niet gevonden. Installeer eerst: pip install uv
+    echo [ERROR] uv not found. Install first: pip install uv
     exit /b 1
 )
 
-REM 2. Installeer dependencies (core + data + ml)
-echo [1/4] Core + data + ML dependencies installeren...
+REM 2. Install dependencies (core + data + ml)
+echo [1/4] Installing core + data + ML dependencies...
 uv sync --extra dev --extra ml --extra data
 if errorlevel 1 exit /b 1
 
-REM 3. Zware multimodale modellen (optioneel — groot)
-echo [2/4] Multimodale modellen installeren (whisper, DeepFace, FinBERT)...
+REM 3. Heavy multimodal models (optional — large)
+echo [2/4] Installing multimodal models (whisper, DeepFace, FinBERT)...
 uv sync --extra multimodal
 if errorlevel 1 exit /b 1
 
-REM 4. MediaPipe (pose) — werkt doorgaans goed op Windows
-echo [3/4] MediaPipe installeren (pose/gezichtsdetectie)...
+REM 4. MediaPipe (pose) — usually works well on Windows
+echo [3/4] Installing MediaPipe (pose/face detection)...
 uv sync --extra video
 if errorlevel 1 exit /b 1
 
-REM 5. Tests draaien
-echo [4/4] Tests draaien...
+REM 5. Run tests
+echo [4/4] Running tests...
 uv run pytest
 if errorlevel 1 exit /b 1
 
 echo.
-echo === Installatie klaar! ===
+echo === Install complete! ===
 echo.
-echo Start de demo:   uv run python -m hermes_bot.demo
-echo Start de web-UI: uv run python -m hermes_bot.webui  (http://localhost:9124)
+echo Start the demo:   uv run python -m hermes_bot.demo
+echo Start the web UI: uv run python -m hermes_bot.webui  (http://localhost:9124)
 echo.
 pause

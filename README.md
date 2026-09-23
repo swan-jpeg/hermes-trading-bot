@@ -1,93 +1,93 @@
 # Hermes Trading Bot
 
-Modulaire multi-asset AI-trading-bot (Python). Doel: **goede winst** én
-**weerstand tegen marktcrashes**, over aandelen, ETF's, opties, obligaties en cash.
+A modular multi-asset AI trading bot (Python). Goal: **good returns** and
+**resilience against market crashes**, across stocks, ETFs, options, bonds and cash.
 
-> ⚠️ **BACKTEST VÓÓR GELD, PAPER VÓÓR LIVE.** Dit is een werkend skeleton met
-> alle architectuurlagen. De risicolaag en backtests zijn verplichte poorten
-> vóór enige live order.
+> ⚠️ **BACKTEST BEFORE MONEY, PAPER BEFORE LIVE.** This is a working skeleton with
+> all architecture layers. The risk layer and backtests are mandatory gates
+> before any live order.
 
-## Architectuur (7 lagen)
+## Architecture (7 layers)
 
 ```
-24/7 data → signalen (audio/video/reports/alerts) → AI-agenten → fusie
-         → RL-besluitvorming + Monte Carlo/risico → executie (paper/live)
+24/7 data → signals (audio/video/reports/alerts) → AI agents → fusion
+         → RL decision + Monte Carlo/risk → execution (paper/live)
 ```
 
-Zie `PLAN-QWEN.md` voor het implementatieplan.
+See `PLAN-QWEN.md` for the implementation plan.
 
-## Snelle start
+## Quick start
 
 ```bash
-# 1. Installeer (Python 3.11+)
+# 1. Install (Python 3.11+)
 uv sync --extra dev --extra ml --extra data
 
-# 2. Zware multimodale modellen (optioneel, groot — zie hieronder)
+# 2. Heavy multimodal models (optional, large — see below)
 uv sync --extra multimodal
-uv sync --extra video        # alleen op machines waar mediapipe werkt
+uv sync --extra video        # only on machines where mediapipe works
 
-# 3. Tests + kwaliteit
+# 3. Tests + quality
 uv run pytest
 uv run ruff check hermes_bot tests
 
 # 4. End-to-end demo
 uv run python -m hermes_bot.demo
 
-# 5. Web-interface (poort 9124)
+# 5. Web interface (port 9124)
 uv run python -m hermes_bot.webui
 ```
 
-## Zware modellen (optioneel)
+## Heavy models (optional)
 
-De multimodale analyse (spraak→tekst, emotie, gezichtsuitdrukking, pose) gebruikt
-**bestaande opensource-modellen** — je hoeft niets zelf te trainen:
+The multimodal analysis (speech→text, emotion, facial expression, pose) uses
+**existing open-source models** — you don't need to train anything yourself:
 
 | Component | Model | Extra |
 |---|---|---|
-| Spraak→tekst | faster-whisper | `multimodal` |
-| Emotie (spraak) | prosodie-gebaseerd (librosa) | `multimodal` |
-| Gezichtsuitdrukking | DeepFace | `multimodal` |
-| Pose/lichaamstaal | MediaPipe Pose | `video` |
-| Financieel sentiment | FinBERT (transformers) | `multimodal` |
+| Speech→text | faster-whisper | `multimodal` |
+| Emotion (speech) | prosody-based (librosa) | `multimodal` |
+| Facial expression | DeepFace | `multimodal` |
+| Pose/body language | MediaPipe Pose | `video` |
+| Financial sentiment | FinBERT (transformers) | `multimodal` |
 
-**Belangrijk:** de zware modellen worden alleen geladen als `use_heavy_models=True`
-in `AudioAnalyzer`/`VideoAnalyzer`. Standaard uit (offline-safe) zodat de pipeline
-snel en stabiel blijft. Zet aan op een machine waar de modellen werken (bv. Windows
-met GPU). MediaPipe geeft op sommige CPU's een harde crash — installeer de `video`-extra
-alleen waar het werkt.
+**Important:** the heavy models are only loaded when `use_heavy_models=True`
+in `AudioAnalyzer`/`VideoAnalyzer`. Off by default (offline-safe) so the pipeline
+stays fast and stable. Enable on a machine where the models work (e.g. Windows
+with GPU). MediaPipe can hard-crash on some CPUs — install the `video` extra
+only where it works.
 
-## Mappenstructuur
+## Directory structure
 
 ```
 hermes_bot/
-├── data/            # LAAG 1-2: collectors, storage, features
-├── signals/         # LAAG 3: audio/video, reports, alerts, sentiment
-├── agents/          # LAAG 4: fundamentele AI-agent
-├── fusion/          # LAAG 5: fusiemodel (kwaliteit/zekerheid/emotie)
-├── rl/              # LAAG 6: RL-besluitvorming (env, reward, policy)
-├── simulation/      # LAAG 6: Monte Carlo (bootstrap, scenario's, metrics)
-├── risk/            # LAAG 6: risico-engine (sizing, drawdown, stress, hedging)
-├── portfolio/       # allocatie over assetklassen (multi-asset)
-├── execution/       # LAAG 7: output actie → broker (paper/live)
-├── expansions/      # B2B bottleneck, regime-detectie, orderflow
-└── webui.py         # web-interface (poort 9124)
+├── data/            # LAYER 1-2: collectors, storage, features
+├── signals/         # LAYER 3: audio/video, reports, alerts, sentiment
+├── agents/          # LAYER 4: fundamental AI agent
+├── fusion/          # LAYER 5: fusion model (quality/certainty/emotion)
+├── rl/              # LAYER 6: RL decision (env, reward, policy)
+├── simulation/      # LAYER 6: Monte Carlo (bootstrap, scenarios, metrics)
+├── risk/            # LAYER 6: risk engine (sizing, drawdown, stress, hedging)
+├── portfolio/       # allocation across asset classes (multi-asset)
+├── execution/       # LAYER 7: output action → broker (paper/live)
+├── expansions/      # B2B bottleneck, regime detection, orderflow
+└── webui.py         # web interface (port 9124)
 ```
 
-## Kernontwerpregels
+## Core design rules
 
-1. **RL voorstelt, Risk keurt goed** — nooit een RL-output rechtstreeks naar de markt.
-2. **Fail-closed**: als broker onbereikbaar is → géén order.
-3. **Decision ≠ executie**: log intentie én echte fills.
-4. **Verifieer elke order** met de broker.
-5. **Backtest vóór geld, paper vóór live.**
+1. **RL proposes, Risk approves** — never send an RL output straight to the market.
+2. **Fail-closed**: if the broker is unreachable → no order.
+3. **Decision ≠ execution**: log intent and real fills.
+4. **Verify every order** with the broker.
+5. **Backtest before money, paper before live.**
 
 ## Windows / GitHub
 
-- Dit project is klaar om naar GitHub te pushen (zie `git remote add origin ...`).
-- Op Windows: installeer Python 3.11+, `uv`, en draai dezelfde commando's.
-  De `video`-extra (mediapipe) werkt doorgaans goed op Windows.
-- API-keys gaan in `.env` (nooit in code). Zie `.env.example`.
+- This project is ready to push to GitHub (see `git remote add origin ...`).
+- On Windows: install Python 3.11+, `uv`, and run the same commands.
+  The `video` extra (mediapipe) usually works well on Windows.
+- API keys go in `.env` (never in code). See `.env.example`.
 
-## Licentie
+## License
 
-MIT — zie `LICENSE`.
+MIT — see `LICENSE`.
