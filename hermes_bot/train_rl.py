@@ -61,15 +61,14 @@ def resolve_device(requested: str):
             print("torch-directml niet geïnstalleerd — val terug op CPU.")
             return torch.device("cpu")
     # auto
-
     if torch.cuda.is_available():
-        return "cuda"
+        return torch.device("cuda")
     try:
-        import torch_directml  # noqa: F401
+        import torch_directml
 
-        return "dml"
+        return torch_directml.device()
     except Exception:  # noqa: BLE001
-        return "cpu"
+        return torch.device("cpu")
 
 
 def load_prices(ticker: str, years: int) -> np.ndarray:
