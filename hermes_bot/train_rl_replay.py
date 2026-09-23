@@ -25,6 +25,7 @@ back to synthetic prices so training still works offline.
 from __future__ import annotations
 
 import argparse
+import os
 import pathlib
 import warnings
 from typing import TYPE_CHECKING
@@ -42,8 +43,12 @@ if TYPE_CHECKING:
 
 warnings.filterwarnings("ignore")
 
+
 MODELS_DIR = pathlib.Path(__file__).resolve().parent.parent / "models"
-REPLAY_DATA_DIR = pathlib.Path(__file__).resolve().parent.parent / "replay_data"
+# Grote replay-data gaat op de EXTERNE SSD (configureerbaar via env-var).
+# Op de Windows-PC van de gebruiker: set REPLAY_DATA_DIR=D:\trading-bot-replay
+REPLAY_DATA_DIR = pathlib.Path(os.environ.get(
+    "REPLAY_DATA_DIR", "/mnt/ssd/trading-bot-replay"))
 
 
 def resolve_device(requested: str):
@@ -231,55 +236,78 @@ def train_phase_1(ticker: str, years: int, timesteps: int, seed: int = 42, devic
     return model
 
 
-def train_phase_2(model: PPO, ticker: str, seed: int = 42, device="cpu") -> PPO:
-    """Phase 2: Fine-tune on real replay data."""
+def train_phase_2(model: PPO, ticker: str, seed: int = 42, device="cpu",
+                  timesteps: int = 100_000) -> PPO:
+    """Phase 2: Fine-tune on real replay data (chronological, live-like).
+
+    Speelt de historische gebeurtenissen dag-voor-dag af alsof het live is:
+    elke dag worden de gebeurtenissen van die dag door de impact agent vertaald
+    naar AssetContexts, en het model traint op (impact-vector + prijs) -> actie
+    -> reward. De reward is de winst/verlies van de hele setup.
+    """
     print(f"Phase 2: Fine-tuning with replay data for {ticker}...")
-    
-    # Initialize the replay simulator
+
+    # Initialize the replay simulator (chronological replay).
     simulator = ReplaySimulator(
-        sectors=["government", "macro", "tech", "consumer", "healthcare", 
+        sectors=["government", "macro", "tech", "consumer", "healthcare",
                  "finance", "semiconductor", "actuators", "power", "battery"],
         start_date="2020-01-01",
-        end_date="2023-12-31"
+        end_date="2023-12-31",
     )
-    
-    # Fetch historical events (this might take a while)
-    print("Fetching historical events...")
-    simulator.fetch_historical_events()
-    
-    # Load prices for the date range
-    print("Loading prices...")
-    simulator.load_prices_for_date_range(ticker)
-    
-    # Simulate replay (this creates contexts for training)
+
+    # Load previously saved data if available (offline training on the PC),
+    # otherwise fetch from GDELT + yfinance and save to the external SSD.
+    if simulator.load_data(ticker):
+        print("Replay-data geladen uit de data-map (geen nieuwe fetch).")
+    else:
+        print("Fetching historical events...")
+        simulator.fetch_historical_events()
+        print("Loading prices...")
+        simulator.load_prices_for_date_range(ticker)
+        simulator.save_data(ticker)
+
+    # Simulate replay: this creates AssetContexts per day (chronological).
     print("Simulating replay...")
     contexts_by_date = simulator.simulate_replay(ticker, seed=seed)
-    
-    # Prepare training data from replay contexts
+
+    # Flatten the contexts into a chronological sequence.
     all_contexts = []
     for _date, contexts in contexts_by_date.items():
         all_contexts.extend(contexts)
-    
+
     print(f"Generated {len(all_contexts)} contexts from replay data.")
-    
-    # Create a new environment with replay data
     if len(all_contexts) == 0:
         raise ValueError("No contexts generated from replay data.")
-    
-    # Use the first few contexts to determine the environment parameters
-    # Note: This is a simplified approach - in a real implementation you'd 
-    # properly construct the environment with the replay data
-    print("Creating environment with replay data...")
-    
-    # For now, we'll use the same environment construction but with replay contexts
-    # In a proper implementation, you'd need to adapt the environment to handle 
-    # the replay data properly
-    
-    # Since we're just demonstrating the two-phase approach, we'll just return the model
-    # In practice, you would:
-    # 1. Create a new environment with replay contexts
-    # 2. Continue training with the existing model using the replay data
-    print("Phase 2 training completed (demo implementation).")
+
+    # Build a training environment from the replay contexts.
+    # Prices: use the real (or synthetic) price series for the ticker.
+    prices = load_prices(ticker, 3)
+    signals = build_fusion_signals(prices, seed)
+    portfolio = PortfolioState(cash=100_000.0)
+    policy = RulePolicy()
+
+    class _StubRisk:
+        def __init__(self) -> None:
+            self.var_95 = -0.02
+            self.crash_prob = 0.05
+            self.regime = "bull"
+
+    env = TradingEnv(
+        prices=prices,
+        fusion_signals=signals,
+        portfolio_state=portfolio,
+        risk_engine=_StubRisk(),
+        rule_policy=policy,
+        max_steps=len(prices),
+        seed=seed,
+        asset_contexts=all_contexts,
+    )
+
+    # Continue training the Phase-1 model on the replay data.
+    print(f"Fine-tuning PPO for {timesteps} timesteps (Phase 2)...")
+    model.set_env(env)
+    model.learn(total_timesteps=timesteps)
+    print("Phase 2 training completed.")
     return model
 
 
@@ -298,7 +326,8 @@ def main() -> int:
                                  args.timesteps // 2, args.seed, args.device)
     
     # Phase 2: Fine-tune on real replay data
-    model_phase2 = train_phase_2(model_phase1, args.ticker, args.seed, args.device)
+    model_phase2 = train_phase_2(model_phase1, args.ticker, args.seed, args.device,
+                                  args.timesteps // 2)
     
     # Save the final model
     MODELS_DIR.mkdir(parents=True, exist_ok=True)

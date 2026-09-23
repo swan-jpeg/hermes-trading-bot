@@ -6,6 +6,9 @@ processing them through the impact agent, fusion, and RL pipeline.
 """
 
 import logging
+import os
+import pathlib
+import time
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -40,26 +43,38 @@ class ReplaySimulator:
         impact_agent: LLMImpactAgent | None = None,
         sectors: list[str] | None = None,
         start_date: str = "2020-01-01",
-        end_date: str = "2023-12-31"
+        end_date: str = "2023-12-31",
+        data_dir: str | None = None,
     ):
         """
         Initialize the replay simulator.
-        
+
         Args:
             impact_agent: The impact agent to use for processing events.
+                Default: LLMImpactAgent with the best FREE Nous model
+                (stepfun/step-3.7-flash:free) — NOT a paid model.
             sectors: List of sectors to query for historical events.
             start_date: Start date for historical events (YYYY-MM-DD).
             end_date: End date for historical events (YYYY-MM-DD).
+            data_dir: Where to store large replay data (default: the
+                REPLAY_DATA_DIR env-var, which points to the external SSD).
         """
-        self.impact_agent = impact_agent or LLMImpactAgent()
+        if impact_agent is None:
+            impact_agent = LLMImpactAgent(
+                model="stepfun/step-3.7-flash:free",
+                base_url="https://inference-api.nousresearch.com/v1",
+            )
+        self.impact_agent = impact_agent
         self.sectors = sectors or [
-            "government", "macro", "tech", "consumer", "healthcare", 
+            "government", "macro", "tech", "consumer", "healthcare",
             "finance", "semiconductor", "actuators", "power", "battery"
         ]
         self.start_date = start_date
         self.end_date = end_date
         self.events_by_date: dict[str, list[HistoricalEvent]] = defaultdict(list)
         self.prices: dict[str, list[float]] = {}
+        self.data_dir = pathlib.Path(data_dir or os.environ.get(
+            "REPLAY_DATA_DIR", "/mnt/ssd/trading-bot-replay"))
         
     def fetch_historical_events(self) -> None:
         """
@@ -70,8 +85,11 @@ class ReplaySimulator:
         # Clear existing events
         self.events_by_date.clear()
         
-        # Fetch events for each sector
-        for sector in self.sectors:
+        # Fetch events for each sector (with a pause to respect GDELT's
+        # rate limit — 429s happen when hammering the API).
+        for i, sector in enumerate(self.sectors):
+            if i > 0:
+                time.sleep(2.0)  # avoid 429 rate-limit
             logger.info(f"Fetching events for sector: {sector}")
             events = fetch_events(
                 query=sector,
@@ -230,6 +248,50 @@ class ReplaySimulator:
         
         return all_asset_contexts
     
+    def save_data(self, ticker: str = "SPY") -> None:
+        """Save the fetched events + prices to the data dir (external SSD).
+
+        Dit is de export die de gebruiker naar zijn PC downloadt om daar te
+        trainen. Alleen code + een klein voorbeeld gaat naar GitHub; de grote
+        data blijft op de externe SSD.
+        """
+        import json
+
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        events_out = []
+        for _date, evs in self.events_by_date.items():
+            for ev in evs:
+                events_out.append({
+                    "date": ev.date, "title": ev.title, "url": ev.url,
+                    "domain": ev.domain, "source": ev.source,
+                })
+        (self.data_dir / "events.json").write_text(
+            json.dumps(events_out, indent=2))
+        (self.data_dir / "prices.json").write_text(
+            json.dumps(self.prices, indent=2))
+        logger.info(f"Data opgeslagen in {self.data_dir} "
+                    f"({len(events_out)} events)")
+
+    def load_data(self, ticker: str = "SPY") -> bool:
+        """Load previously saved events + prices from the data dir.
+
+        Returns True if data was loaded (so the user can train offline on the
+        PC without re-fetching GDELT).
+        """
+        import json
+
+        events_file = self.data_dir / "events.json"
+        prices_file = self.data_dir / "prices.json"
+        if not events_file.exists() or not prices_file.exists():
+            return False
+        self.events_by_date.clear()
+        for ev in json.loads(events_file.read_text()):
+            self.events_by_date[ev["date"]].append(HistoricalEvent(**ev))
+        self.prices = json.loads(prices_file.read_text())
+        logger.info(f"Data geladen uit {self.data_dir} "
+                    f"({sum(len(v) for v in self.events_by_date.values())} events)")
+        return True
+
     def simulate_replay(
         self, 
         ticker: str = "SPY",

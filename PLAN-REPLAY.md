@@ -107,3 +107,39 @@ De webscraping wordt GESIMULEERD alsof het live is: op elke historische dag
 3. De hele keten draait end-to-end (impact → fusion → RL → risk → MC).
 4. Twee-fase training: synthetisch eerst, dan fine-tune op echte data.
 5. Tests groen, ruff schoon, alles gecommit + gepusht.
+
+## Hoe te runnen (op de Windows-PC van de gebruiker)
+
+### 1. Download de repo + data
+- Download de repo (of de zip) op je Windows-PC.
+- De grote replay-data staat op de server in `/mnt/ssd/trading-bot-replay/`
+  (events.json + prices.json). Download die map naar je PC.
+
+### 2. Installeer
+```bash
+uv sync --extra ml --extra data
+```
+
+### 3. Zet de data-map (op je PC: lokale map)
+```bash
+# Windows (PowerShell):
+$env:REPLAY_DATA_DIR = "D:\trading-bot-replay"
+# of Linux/macOS:
+export REPLAY_DATA_DIR=/path/to/trading-bot-replay
+```
+
+### 4. Train (twee-fase: synthetisch eerst, dan fine-tune op echte data)
+```bash
+uv run python -m hermes_bot.train_rl_replay --ticker SPY --years 3 --timesteps 200000
+```
+
+### Hoe lang
+- **Data-verwerking** (GDELT + impact agent over historische gebeurtenissen):
+  ~1-2 uur op de server (eenmalig, wordt opgeslagen op de SSD).
+- **Export**: een paar minuten (zip downloaden).
+- **RL-training op je PC**: ~30 min tot 2-3 uur op je GPU (8GB VRAM),
+  afhankelijk van data-hoeveelheid en timesteps.
+
+### Het getrainde model
+- Opgeslagen in `models/rl_ppo_replay_<ticker>.zip`.
+- Gebruik het later met: `RLFusionModel(policy=TrainedPolicy(model))`.
