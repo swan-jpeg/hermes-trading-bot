@@ -7,6 +7,43 @@ A modular multi-asset AI trading bot (Python). Goal: **good returns** and
 > all architecture layers. The risk layer and backtests are mandatory gates
 > before any live order.
 
+## ⬇️ Download & run
+
+[![Download](https://img.shields.io/badge/Download-Latest%20Release-0a84ff?style=for-the-badge&logo=github)](https://github.com/swan-jpeg/hermes-trading-bot/releases/latest)
+
+Two download options per release:
+
+| Option | What's inside | Size |
+| --- | --- | --- |
+| **Core** | Risk engine + backtest + portfolio + execution (the essential part) | small |
+| **Full** | Everything, including the heavy-model extras (speech, emotion, pose) | large |
+
+### Run it (any OS)
+
+```bash
+# 1. Download the zip (Core or Full) from the Releases page and unzip it.
+# 2. Install Python 3.11+ and uv (https://docs.astral.sh/uv/).
+# 3. Install dependencies:
+uv sync --extra dev --extra ml --extra data
+#    (Full only — heavy models, optional & large):
+uv sync --extra multimodal
+uv sync --extra video        # only on machines where mediapipe works
+
+# 4. Run the demo:
+uv run python -m hermes_bot.demo
+
+# 5. Or start the web interface (port 9124):
+uv run python -m hermes_bot.webui
+```
+
+On Windows, just double-click `install_windows.bat` (installs everything and runs the tests).
+
+### Releases
+
+| Version | Core (risk engine) | Full (everything) |
+| --- | --- | --- |
+<!-- RELEASES -->
+
 ## Architecture (7 layers)
 
 ```
