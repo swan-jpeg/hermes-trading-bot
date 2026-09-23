@@ -458,12 +458,15 @@ COMPONENT_INFO = {
         "titel": "Impact Agent",
         "rol": "Koppelt gebeurtenissen aan beïnvloede instrumenten.",
         "wat": "Bepaalt WELKE stocks, obligaties en ETF's geraakt worden door een "
-               "gebeurtenis (speech, kwartaalrapport, overheidsuitgave, nieuws) via "
-               "keyword/sector-matching. Levert per beïnvloede entiteit een "
-               "fusion-input, zodat het RL-model per instrument kan beslissen.",
-        "in": "speech · reports · alerts",
-        "uit": "beïnvloede instrumenten → fusion (per entiteit)",
-        "code": "hermes_bot/impact.py",
+               "gebeurtenis (speech, kwartaalrapport, overheidsuitgave, nieuws). "
+               "Gebruikt keyword/sector-matching, of een eigen LLM met de "
+               "impact-agent-skill (impact_agent/skill/) die de context begrijpt "
+               "(bv. 'Trump prijst Jensen Huang' → NVDA). Levert per beïnvloede "
+               "entiteit een vector {entity, asset_class, sentiment, confidence} "
+               "als input voor het RL-model.",
+        "in": "speech · reports · alerts · (optioneel) eigen LLM",
+        "uit": "beïnvloede instrumenten → RL-model (per entiteit)",
+        "code": "hermes_bot/impact.py · impact_agent/skill/",
     },
     "fusion": {
         "titel": "Fusion Model",
@@ -579,7 +582,7 @@ def _architecture_html() -> str:
     n_regional = _node("regional", 90, 285, 170, 50, "Regionale Scores", ["veiligheid · economie"], "")
     n_regime = _node("regime", 520, 285, 170, 50, "Regime / Orderflow", ["bull · crash · COT"], "")
     # Impact agent: links events to affected instruments.
-    n_impact = _node("impact", 290, 360, 200, 50, "Impact Agent", ["welke stocks · obligaties · ETF's"], "core", "gCore")
+    n_impact = _node("impact", 290, 360, 200, 50, "Impact Agent", ["welke stocks · LLM-skill"], "core", "gCore")
     # Laag 3 fusion
     n_fusion = _node("fusion", 390, 440, 220, 56, "Fusion Model", ["kwaliteit · zekerheid · emotie"], "core", "gCore")
     # Laag 4
