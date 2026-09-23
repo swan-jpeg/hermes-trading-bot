@@ -75,6 +75,25 @@ uv run python -m hermes_bot.demo
 uv run python -m hermes_bot.webui
 ```
 
+## Train the RL model (on your PC)
+
+The RL decision layer is a Gymnasium environment + PPO (stable-baselines3).
+Train it on your own machine — a small PPO model needs only a few MB, so
+**8GB VRAM / 16GB RAM is plenty** (even CPU works).
+
+```bash
+# 1. Install with the ML extras (includes stable-baselines3 + torch):
+uv sync --extra ml --extra data
+
+# 2. Train (real SPY data via yfinance, or synthetic offline):
+uv run python -m hermes_bot.train_rl --ticker SPY --years 5 --timesteps 200000
+
+# 3. The model is saved to models/rl_ppo_SPY.zip
+```
+
+The trained model plugs into the existing decision layer behind the same
+interface — the risk engine still gates every proposal (RL proposes, Risk approves).
+
 ## Heavy models (optional)
 
 The multimodal analysis (speech→text, emotion, facial expression, pose) uses
