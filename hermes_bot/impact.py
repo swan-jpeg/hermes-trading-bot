@@ -216,8 +216,8 @@ class LLMImpactAgent(ImpactAgent):
 
     def __init__(self, sector_map: dict | None = None,
                  api_key: str | None = None,
-                 model: str = "meta-llama/llama-3.1-8b-instruct:free",
-                 base_url: str = "https://openrouter.ai/api/v1") -> None:
+                 model: str = "stepfun/step-3.7-flash:free",
+                 base_url: str = "https://inference-api.nousresearch.com/v1") -> None:
         super().__init__(sector_map)
         self.api_key = api_key
         self.model = model
