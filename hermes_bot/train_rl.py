@@ -60,15 +60,11 @@ def resolve_device(requested: str):
         except Exception:  # noqa: BLE001
             print("torch-directml niet geïnstalleerd — val terug op CPU.")
             return torch.device("cpu")
-    # auto
+    # auto: CUDA if available, else CPU. DirectML is a preview and often
+    # slower/unstable for this tiny model — only use it when explicitly asked.
     if torch.cuda.is_available():
         return torch.device("cuda")
-    try:
-        import torch_directml
-
-        return torch_directml.device()
-    except Exception:  # noqa: BLE001
-        return torch.device("cpu")
+    return torch.device("cpu")
 
 
 def load_prices(ticker: str, years: int) -> np.ndarray:
@@ -141,8 +137,8 @@ def main() -> int:
     ap.add_argument("--years", type=int, default=5, help="jaren historie (default: 5)")
     ap.add_argument("--timesteps", type=int, default=200_000, help="PPO timesteps (default: 200k)")
     ap.add_argument("--seed", type=int, default=42)
-    ap.add_argument("--device", default="auto",
-                    help="auto | cpu | cuda | dml (DirectML voor AMD Radeon op Windows)")
+    ap.add_argument("--device", default="cpu",
+                    help="cpu (default) | cuda | dml (DirectML voor AMD Radeon op Windows)")
     args = ap.parse_args()
 
     print(f"Loading {args.ticker} ({args.years}y)...")
