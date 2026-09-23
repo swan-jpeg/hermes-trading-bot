@@ -27,6 +27,7 @@ from hermes_bot.expansions import (
     RegionalScorer,
 )
 from hermes_bot.fusion import WeightedFusion
+from hermes_bot.impact import ImpactAgent
 from hermes_bot.portfolio import PortfolioState
 from hermes_bot.risk_v2.montecarlo import MonteCarloEngineV2
 from hermes_bot.risk_v2_1 import RiskEngineV21
@@ -42,6 +43,7 @@ class PipelineResult:
     bottleneck_ratings: dict = field(default_factory=dict)
     regime: str = "unknown"
     regional_scores: dict = field(default_factory=dict)
+    impacted: list[dict] = field(default_factory=list)
     risk_budget: float = 0.0
     effective_exposure: float = 0.0
     decision: dict = field(default_factory=dict)
@@ -157,6 +159,7 @@ class Pipeline:
         self.risk = RiskEngineV21(config or {})
         self.mc = MonteCarloEngineV2(seed=self.cfg.get("seed", 42), n_paths=1000)
         self.bottleneck_analyzer = BottleneckAnalyzer()
+        self.impact_agent = ImpactAgent()
         self.portfolio = PortfolioState(cash=100_000.0)
 
     def run(
@@ -177,7 +180,28 @@ class Pipeline:
         regional_input = build_regional_scores_input(reports)
         regime_input = build_regime_input(regime_features)
 
-        all_inputs = inputs + bottleneck_inputs + [regional_input, regime_input]
+        # 2b. IMPACT-AGENT: koppel gebeurtenissen aan beïnvloede instrumenten.
+        #     Bepaalt WELKE stocks/obligaties/ETF's geraakt worden door de
+        #     speech/report/alert, en levert per-entiteit fusion-inputs.
+        impact_inputs: list[dict] = []
+        impacted: list[dict] = []
+        for inp in inputs:
+            text = inp.get("body") or inp.get("headline") or inp.get("summary", "")
+            entity_id = inp.get("entity_id", "")
+            # Skip alleen als er GEEN tekst EN GEEN entity_id is (niets om te matchen).
+            if not text and not entity_id:
+                continue
+            result = self.impact_agent.analyze(
+                text, source=inp.get("source", "news"),
+                entity_id=entity_id,
+            )
+            if result.impacted:
+                impacted.extend(result.impacted)
+                impact_inputs.extend(
+                    self.impact_agent.to_fusion_inputs(result, sentiment=inp.get("sentiment", 0.0))
+                )
+
+        all_inputs = inputs + bottleneck_inputs + [regional_input, regime_input] + impact_inputs
 
         # 3. Fusion combines all sources.
         fused = self.fusion.fuse(all_inputs)
@@ -211,6 +235,7 @@ class Pipeline:
             bottleneck_ratings=ratings,
             regime=regime_input.get("regime", "unknown"),
             regional_scores=regional_input.get("regional_scores", {}),
+            impacted=impacted,
             risk_budget=round(breakdown.risk_budget, 4),
             effective_exposure=round(exposure, 4),
             decision=decision.model_dump(),

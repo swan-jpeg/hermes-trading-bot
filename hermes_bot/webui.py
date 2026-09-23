@@ -311,7 +311,7 @@ ARCH_SVG = """<svg id="arch" viewBox="0 0 1000 860" style="width:100%;height:aut
   <!-- ===== LAYER 2 — SIGNALS / EXTENSIONS ===== -->
   <g class="arch-cap"><text x="30" y="180">LAAG 2 · SIGNALEN</text></g>
   {n_speech}{n_reports}{n_alerts}
-  {n_bottleneck}{n_regional}{n_regime}
+  {n_bottleneck}{n_regional}{n_regime}{n_impact}
 
   <!-- ===== LAYER 3 — FUSION ===== -->
   <g class="arch-cap"><text x="30" y="360">LAAG 3 · FUSIE</text></g>
@@ -339,6 +339,11 @@ ARCH_SVG = """<svg id="arch" viewBox="0 0 1000 860" style="width:100%;height:aut
   <path class="arch-edge" d="{e_bottleneck_fusion}" marker-end="url(#arrow)"/>
   <path class="arch-edge" d="{e_regional_fusion}" marker-end="url(#arrow)"/>
   <path class="arch-edge" d="{e_regime_fusion}" marker-end="url(#arrow)"/>
+  <!-- signalen -> impact-agent -> fusion -->
+  <path class="arch-edge" d="{e_speech_impact}" marker-end="url(#arrow)"/>
+  <path class="arch-edge" d="{e_reports_impact}" marker-end="url(#arrow)"/>
+  <path class="arch-edge" d="{e_alerts_impact}" marker-end="url(#arrow)"/>
+  <path class="arch-edge" d="{e_impact_fusion}" marker-end="url(#arrow)"/>
   <!-- fusion -> rl -->
   <path class="arch-edge" d="{e_fusion_rl}" marker-end="url(#arrow)"/>
   <!-- rl / mc -> risk -->
@@ -450,6 +455,17 @@ COMPONENT_INFO = {
         "in": "market data · orderflow",
         "uit": "regime label → fusion + risk engine",
         "code": "hermes_bot/expansions/__init__.py",
+    },
+    "impact": {
+        "titel": "Impact Agent",
+        "rol": "Koppelt gebeurtenissen aan beïnvloede instrumenten.",
+        "wat": "Bepaalt WELKE stocks, obligaties en ETF's geraakt worden door een "
+               "gebeurtenis (speech, kwartaalrapport, overheidsuitgave, nieuws) via "
+               "keyword/sector-matching. Levert per beïnvloede entiteit een "
+               "fusion-input, zodat het RL-model per instrument kan beslissen.",
+        "in": "speech · reports · alerts",
+        "uit": "beïnvloede instrumenten → fusion (per entiteit)",
+        "code": "hermes_bot/impact.py",
     },
     "fusion": {
         "titel": "Fusion Model",
@@ -564,6 +580,8 @@ def _architecture_html() -> str:
     n_bottleneck = _node("bottleneck", 720, 195, 190, 54, "B2B Bottleneck", ["supply-chain · knelpunten"], "")
     n_regional = _node("regional", 90, 270, 170, 50, "Regionale Scores", ["veiligheid · economie"], "")
     n_regime = _node("regime", 520, 270, 170, 50, "Regime / Orderflow", ["bull · crash · COT"], "")
+    # Impact-agent: koppelt gebeurtenissen aan beïnvloede instrumenten.
+    n_impact = _node("impact", 290, 320, 200, 50, "Impact Agent", ["welke stocks · obligaties · ETF's"], "core", "gCore")
     # Laag 3 fusion
     n_fusion = _node("fusion", 390, 375, 220, 56, "Fusion Model", ["kwaliteit · zekerheid · emotie"], "core", "gCore")
     # Laag 4
@@ -594,6 +612,12 @@ def _architecture_html() -> str:
     e["e_bottleneck_fusion"] = _edge(815, 249, 550, 375, 0.5, 0.5)
     e["e_regional_fusion"] = _edge(175, 320, 500, 375, 0.5, 0.4)
     e["e_regime_fusion"] = _edge(605, 320, 520, 375, 0.5, 0.45)
+    # signalen -> impact-agent (koppelt gebeurtenis aan beïnvloede instrumenten)
+    e["e_speech_impact"] = _edge(175, 249, 300, 320, 0.5, 0.4)
+    e["e_reports_impact"] = _edge(385, 249, 390, 320, 0.5, 0.4)
+    e["e_alerts_impact"] = _edge(605, 249, 480, 320, 0.5, 0.45)
+    # impact -> fusion (per beïnvloede entiteit)
+    e["e_impact_fusion"] = _edge(390, 370, 480, 375, 0.5, 0.4)
     # fusion -> rl
     e["e_fusion_rl"] = _edge(500, 431, 245, 530, 0.5, 0.4)
     # rl -> risk, mc -> risk
@@ -609,6 +633,7 @@ def _architecture_html() -> str:
         "n_server": n_server, "n_scrape": n_scrape,
         "n_speech": n_speech, "n_reports": n_reports, "n_alerts": n_alerts,
         "n_bottleneck": n_bottleneck, "n_regional": n_regional, "n_regime": n_regime,
+        "n_impact": n_impact,
         "n_fusion": n_fusion, "n_rl": n_rl, "n_mc": n_mc, "n_risk": n_risk,
         "n_action": n_action, "n_exec": n_exec,
     }
