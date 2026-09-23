@@ -1,4 +1,4 @@
-"""Smoke-test: schemas + risico-engine + portfolio + winst-nemen-logica."""
+"""Smoke-test: schemas + risk-engine + portfolio + profit-taking logic."""
 from __future__ import annotations
 
 from datetime import UTC, datetime
