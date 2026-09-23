@@ -1,19 +1,19 @@
 """The integrated architecture pipeline.
 
-Dit is de daadwerkelijke integratie van ALLE lagen in één orchestrator.
-De zogenaamde "uitbreidingen" (bottleneck, regime, regionale scores, orderflow)
-zijn hier GEEN losse modules meer — ze zijn echte fusion-inputs en risk-inputs
-die midden in de keten zitten:
+This is the actual integration of ALL layers in one orchestrator.
+The so-called "extensions" (bottleneck, regime, regional scores, orderflow)
+are NO longer separate modules — they are real fusion-inputs and risk-inputs
+that sit in the middle of the chain:
 
-  24/7 server → webscraping → signalen
-       → [bottleneck agent + regime + regionale scores + orderflow]  ← geïntegreerd
+  24/7 server → webscraping → signals
+       → [bottleneck agent + regime + regional scores + orderflow]  ← integrated
        → fusion model
        → risk engine (v2.1) + Monte Carlo
-       → portfolio engine → executie
+       → portfolio engine → execution
 
-Elke stap krijgt een gestructureerd dict met de velden die de volgende laag
-verwacht, zodat de keten end-to-end draait en elke tussenliggende waarde
-zichtbaar/logbaar is.
+Each step gets a structured dict with the fields the next layer
+expects, so the chain runs end-to-end and every intermediate value
+is visible/loggable.
 """
 from __future__ import annotations
 
@@ -70,8 +70,8 @@ def collect_web_inputs(
 def _to_report_signals(reports: list[dict] | None) -> list:
     """Convert raw web report dicts into ReportSignal objects.
 
-    Dit is de correcte integratie: de uitbreidingen (RegionalScorer,
-    BottleneckAnalyzer) werken op ReportSignal-objecten, niet op ruwe dicts.
+    This is the correct integration: the extensions (RegionalScorer,
+    BottleneckAnalyzer) work on ReportSignal objects, not on raw dicts.
     """
     from hermes_bot.schemas import SourceKind
     from hermes_bot.signals.textual import ReportSignal
@@ -96,8 +96,8 @@ def _to_report_signals(reports: list[dict] | None) -> list:
 def build_bottleneck_inputs(reports: list[dict] | None = None) -> list[dict]:
     """Bottleneck agent as a fusion input (integrated, not standalone).
 
-    Haalt vraagsignalen uit webrapporten, koppelt bedrijven aan
-    supply-chain knooppunten, en geeft per-bedrijf ratings als fusie-inputs.
+    Pulls question signals from web reports, links companies to
+    supply-chain nodes, and gives per-company ratings as fusion inputs.
     """
     from hermes_bot.data.scraper import demo_report_records
 
@@ -124,7 +124,7 @@ def build_regional_scores_input(reports: list[dict] | None = None) -> dict:
     return {
         "source": "regional",
         "entity_id": "market",
-        "sentiment": round(avg * 2.0 - 1.0, 4),  # 0..1 scores -> -1..1 richting
+        "sentiment": round(avg * 2.0 - 1.0, 4),  # 0..1 scores -> -1..1 direction
         "confidence": round(0.4 + 0.3 * (2 * avg - 1), 4) if avg else 0.3,
         "regional_scores": scores,
     }
@@ -140,7 +140,7 @@ def build_regime_input(features: dict | None = None) -> dict:
     # Translate regime into a fusion sentiment + risk gate.
     regime_sent = {"bull": 0.5, "bear": -0.4, "highvol": -0.2, "crash": -0.8}.get(regime, 0.0)
     return {
-        "source": "agent",  # regime-feature als agent-achtige macro-input
+        "source": "agent",  # regime-feature as agent-like macro-input
         "entity_id": "market",
         "sentiment": round(regime_sent, 4),
         "confidence": 0.6,
@@ -179,7 +179,7 @@ class Pipeline:
 
         all_inputs = inputs + bottleneck_inputs + [regional_input, regime_input]
 
-        # 3. Fusion combineert alle bronnen.
+        # 3. Fusion combines all sources.
         fused = self.fusion.fuse(all_inputs)
 
         # 4. Risk engine (v2.1) with the v2.1 config.

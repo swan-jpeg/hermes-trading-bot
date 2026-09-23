@@ -1,5 +1,5 @@
-"""Hermes Trading Bot — modulaire multi-asset AI-trading-bot.
+"""Hermes Trading Bot — modular multi-asset AI trading bot.
 
-Architectuur & uitwerking: zie de Obsidian-noten in de vault (Home.md)
-Code-skeleton spiegelt de 7 architectuurlagen.
+Architecture & implementation: see the Obsidian notes in the vault (Home.md)
+Code skeleton mirrors the 7 architectural layers.
 """

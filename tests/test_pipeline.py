@@ -1,7 +1,7 @@
 """Tests for the integrated architecture pipeline.
 
-Verifieert dat de "uitbreidingen" (bottleneck, regime, regionale scores) echt
-IN de keten zitten als fusion-inputs, niet als losse modules.
+Verifies that the "extensions" (bottleneck, regime, regional scores) really
+ARE in the chain as fusion inputs, not as standalone modules.
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from hermes_bot.pipeline import (
 
 
 def test_pipeline_returns_full_result() -> None:
-    """Pipeline geeft alle geïntegreerde tussenwaardes."""
+    """Pipeline returns all integrated intermediate values."""
     result = run_pipeline()
     assert "fusion" in result
     assert "bottleneck_ratings" in result
@@ -31,13 +31,13 @@ def test_bottleneck_is_fusion_input() -> None:
     sources = {i["source"] for i in result["web_inputs"]}
     assert "bottleneck" in sources
     assert "regional" in sources
-    assert "agent" in sources  # regime-feature als agent-input
+    assert "agent" in sources  # regime-feature as agent-input
 
 
 def test_bottleneck_ratings_present() -> None:
-    """Bottleneck-agent geeft per-bedrijf ratings."""
+    """Bottleneck-agent gives per-company ratings."""
     result = run_pipeline()
-    assert result["bottleneck_ratings"]  # niet leeg
+    assert result["bottleneck_ratings"]  # not empty
     assert any(v > 0 for v in result["bottleneck_ratings"].values())
 
 
