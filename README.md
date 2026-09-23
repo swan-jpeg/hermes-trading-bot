@@ -42,6 +42,7 @@ On Windows, just double-click `install_windows.bat` (installs everything and run
 
 | Version | Core (risk engine) | Full (everything) | Changes | Posted (Amsterdam) |
 | --- | --- | --- | --- | --- |
+| v0.2.3 | [core](https://github.com/swan-jpeg/hermes-trading-bot/releases/download/v0.2.3/hermes-trading-bot-v0.2.3-core.zip) | [full](https://github.com/swan-jpeg/hermes-trading-bot/releases/download/v0.2.3/hermes-trading-bot-v0.2.3-full.zip) | Fix --device dml (DirectML device-object voor SB3) | 2026-09-23 17:28 |
 | v0.2.2 | [core](https://github.com/swan-jpeg/hermes-trading-bot/releases/download/v0.2.2/hermes-trading-bot-v0.2.2-core.zip) | [full](https://github.com/swan-jpeg/hermes-trading-bot/releases/download/v0.2.2/hermes-trading-bot-v0.2.2-full.zip) | `--device` optie (AMD Radeon via DirectML) | 2026-09-23 12:34 |
 | v0.2.1 | [core](https://github.com/swan-jpeg/hermes-trading-bot/releases/download/v0.2.1/hermes-trading-bot-v0.2.1-core.zip) | [full](https://github.com/swan-jpeg/hermes-trading-bot/releases/download/v0.2.1/hermes-trading-bot-v0.2.1-full.zip) | Fix RL reward-bug (turnover-penalty per stap) | 2026-09-23 12:20 |
 | v0.2.0 | [core](https://github.com/swan-jpeg/hermes-trading-bot/releases/download/v0.2.0/hermes-trading-bot-v0.2.0-core.zip) | [full](https://github.com/swan-jpeg/hermes-trading-bot/releases/download/v0.2.0/hermes-trading-bot-v0.2.0-full.zip) | Werkende TradingEnv + train_rl.py (PPO) | 2026-09-23 11:45 |
