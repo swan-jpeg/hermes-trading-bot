@@ -80,6 +80,7 @@ class TradingEnv(gym.Env):
         self._returns: list[float] = []
         self._drawdowns: list[float] = []
         self._turnover = 0.0
+        self._step_turnover = 0.0
 
     def reset(self, seed=None, options=None):
         """Reset the environment to the initial state."""
@@ -96,6 +97,7 @@ class TradingEnv(gym.Env):
         self._returns = []
         self._drawdowns = []
         self._turnover = 0.0
+        self._step_turnover = 0.0
         return self._get_observation(), {}
 
     def step(self, action: int):
@@ -126,11 +128,14 @@ class TradingEnv(gym.Env):
             self.holding_days += 1
 
         # Reward via the existing compute_reward function.
+        # Use ONLY this step's turnover (not the cumulative) so the penalty
+        # is charged once when a trade happens, not on every following step.
         reward = compute_reward(
-            returns=self._returns[-1:],
-            drawdowns=self._drawdowns[-1:],
-            turnover=self._turnover,
+            returns=[port_ret],
+            drawdowns=[self._drawdowns[-1]] if self._drawdowns else [0.0],
+            turnover=self._step_turnover,
         )
+        self._step_turnover = 0.0
 
         done = self.current_step >= self.max_steps or self.current_step >= len(self.prices) - 1
         return self._get_observation(), float(reward), done, False, {}
@@ -143,6 +148,7 @@ class TradingEnv(gym.Env):
                 self.entry_step = self.current_step
                 self.holding_days = 0
                 self.allocation = 0.5  # half position to start
+                self._step_turnover += 0.5
                 self._turnover += 0.5
         elif action == 2:  # SELL
             if self.entry_price is not None:
@@ -150,6 +156,7 @@ class TradingEnv(gym.Env):
                 self.entry_price = None
                 self.entry_step = None
                 self.holding_days = 0
+                self._step_turnover += 0.5
                 self._turnover += 0.5
 
     def _current_price(self) -> float:

@@ -96,3 +96,36 @@ def test_env_reward_is_float() -> None:
     _obs, reward, _d, _t, _i = env.step(0)
     assert isinstance(reward, float)
     assert np.isfinite(reward)
+
+
+def test_non_negative_hold_reward_on_rise() -> None:
+    """Regression: a HOLD during a rising price must not earn a negative reward.
+
+    The old env charged the cumulative turnover penalty every step, so on a
+    smooth upward line it returned ~-0.01/day and the episode summed to -684.
+    Fix: the turnover penalty is charged only on the step that trades.
+    """
+    n = 60
+    prices = np.linspace(100, 130, n)  # monotonic rise, no drawdown
+    signals = [{"sentiment": 0.5, "zekerheid": 0.8, "kwaliteit": 0.7}] * n
+    env = TradingEnv(
+        prices=prices,
+        fusion_signals=signals,
+        portfolio_state=PortfolioState(cash=100_000.0),
+        risk_engine=None,
+        rule_policy=RulePolicy(),
+        max_steps=n,
+    )
+    env.reset()
+    env.step(1)  # BUY on day 0
+    # The buy day itself has a small turnover cost; subsequent holds should
+    # earn a positive reward as price rises.
+    hold_rewards = []
+    for _ in range(n - 1):
+        _obs, r, done, _t, _i = env.step(0)
+        if not done:
+            hold_rewards.append(r)
+    assert len(hold_rewards) > 40
+    assert sum(hold_rewards) > 0.0  # rising market, holds accumulate profit
+    assert all(r >= -1e-9 for r in hold_rewards[1:])  # no per-step turnover drain
+
