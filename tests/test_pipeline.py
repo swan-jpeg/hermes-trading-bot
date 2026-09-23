@@ -26,12 +26,14 @@ def test_pipeline_returns_full_result() -> None:
 
 
 def test_bottleneck_is_fusion_input() -> None:
-    """Bottleneck ratings are in the web_inputs (integrated)."""
+    """Bottleneck ratings are fusion inputs, but regional/regime are RISK inputs."""
     result = run_pipeline()
     sources = {i["source"] for i in result["web_inputs"]}
     assert "bottleneck" in sources
-    assert "regional" in sources
-    assert "agent" in sources  # regime-feature as agent-input
+    # Regional + regime/orderflow are NO LONGER fusion inputs: they now go to
+    # the risk engine (via alpha_signals), not to fusion.
+    assert "regional" not in sources
+    assert "agent" not in sources
 
 
 def test_bottleneck_ratings_present() -> None:

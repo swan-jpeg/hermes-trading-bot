@@ -154,7 +154,8 @@ class OpportunityScore:
         alpha_comp = 0.0
         alpha_breakdown = {}
         for key in ["prediction_confidence", "model_agreement", "fundamental_quality",
-                    "valuation", "bottleneck_score", "news_signal"]:
+                    "valuation", "bottleneck_score", "news_signal",
+                    "regime_sentiment", "regional_score"]:
             if key in alpha_signals:
                 v = float(alpha_signals[key])
                 alpha_comp += float(np.clip(v, 0, 1)) * 100 / 6.0

@@ -206,7 +206,9 @@ class Pipeline:
                     self.impact_agent.to_fusion_inputs(result, sentiment=inp.get("sentiment", 0.0))
                 )
 
-        all_inputs = inputs + bottleneck_inputs + [regional_input, regime_input] + impact_inputs
+        # Regional scores + regime/orderflow are RISK inputs, not fusion inputs.
+        # They go to the risk engine via alpha_signals (below), not to fusion.
+        all_inputs = inputs + bottleneck_inputs + impact_inputs
 
         # 3. Fusion combines all sources.
         fused = self.fusion.fuse(all_inputs)
@@ -226,7 +228,18 @@ class Pipeline:
             zekerheid=fused.zekerheid, rationale="pipeline-integrated",
             timestamp=datetime.now(UTC), exit_reason=ExitReason.NONE,
         )
-        exposure, breakdown = self.risk.approve(decision, self.portfolio, equity, mc)
+        # Risk inputs: regional scores + regime/orderflow (not fusion inputs).
+        regional_dict = regional_input.get("regional_scores", {})
+        regional_avg = 0.0
+        if regional_dict:
+            regional_avg = sum(regional_dict.values()) / len(regional_dict)
+        alpha_signals = {
+            "regional_score": round(regional_avg, 4),
+            "regime": regime_input.get("regime", "unknown"),
+            "regime_sentiment": regime_input.get("sentiment", 0.0),
+        }
+        exposure, breakdown = self.risk.approve(
+            decision, self.portfolio, equity, mc, alpha_signals=alpha_signals)
 
         # 5. Return bottleneck ratings (for logging/attribution).
         ratings = {

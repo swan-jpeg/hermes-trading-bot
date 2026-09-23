@@ -338,8 +338,8 @@ ARCH_SVG = """<svg id="arch" viewBox="0 0 1000 940" style="width:100%;height:aut
   <path class="arch-edge" d="{e_alerts_impact}" marker-end="url(#arrow)"/>
   <!-- extensions -> fusion -->
   <path class="arch-edge" d="{e_bottleneck_fusion}" marker-end="url(#arrow)"/>
-  <path class="arch-edge" d="{e_regional_fusion}" marker-end="url(#arrow)"/>
-  <path class="arch-edge" d="{e_regime_fusion}" marker-end="url(#arrow)"/>
+  <path class="arch-edge risk" d="{e_regional_risk}" marker-end="url(#arrowRisk)"/>
+  <path class="arch-edge risk" d="{e_regime_risk}" marker-end="url(#arrowRisk)"/>
   <!-- impact -> fusion (per beïnvloede entiteit) -->
   <path class="arch-edge" d="{e_impact_fusion}" marker-end="url(#arrow)"/>
   <!-- fusion -> rl -->
@@ -470,11 +470,12 @@ COMPONENT_INFO = {
     },
     "fusion": {
         "titel": "Fusion Model",
-        "rol": "Combines all signals into one decision.",
-        "wat": "Weights all inputs (speech, reports, alerts, bottleneck, regional "
-               "scores, regime) into a quality score, certainty and emotion. "
-               "This is the 'what to buy' layer of the architecture.",
-        "in": "all signals + extensions",
+        "rol": "Combines all alpha signals into one decision.",
+        "wat": "Weights all inputs (speech, reports, alerts, b2b bottleneck, "
+               "impact agent) into a quality score, certainty and emotion. "
+               "Regional scores + regime/orderflow are RISK inputs and go "
+               "directly to the risk engine. This is the 'what to buy' layer.",
+        "in": "speech · reports · alerts · bottleneck · impact agent",
         "uit": "quality · certainty · emotion → RL fusion",
         "code": "hermes_bot/fusion/__init__.py",
     },
@@ -503,8 +504,9 @@ COMPONENT_INFO = {
         "wat": "The adaptive risk engine with three layers: Strategic (regime), "
                "Tactical (vol/drawdown/correlation) and Emergency Brake (flash crash). "
                "A recovery engine rebuilds exposure after stabilization. This is the "
-               "'how much risk' layer.",
-        "in": "RL proposal · Monte Carlo · regime",
+               "'how much risk' layer. Regional scores + regime/orderflow are RISK "
+               "inputs fed here (not to fusion).",
+        "in": "RL proposal · Monte Carlo · regime/orderflow · regional scores",
         "uit": "risk budget / exposure → output action",
         "code": "hermes_bot/risk_v2_1/__init__.py",
     },
@@ -612,8 +614,8 @@ def _architecture_html() -> str:
     e["e_alerts_impact"] = _edge(605, 254, 480, 360, 0.5, 0.45)
     # extensions -> fusion (bottleneck/regional/regime go directly to fusion)
     e["e_bottleneck_fusion"] = _edge(815, 254, 550, 440, 0.5, 0.5)
-    e["e_regional_fusion"] = _edge(175, 335, 500, 440, 0.5, 0.4)
-    e["e_regime_fusion"] = _edge(605, 335, 520, 440, 0.5, 0.45)
+    e["e_regional_risk"] = _edge(175, 335, 640, 608, 0.5, 0.4)
+    e["e_regime_risk"] = _edge(605, 335, 750, 580, 0.5, 0.45)
     # impact -> fusion (per beïnvloede entiteit)
     e["e_impact_fusion"] = _edge(390, 410, 480, 440, 0.5, 0.4)
     # fusion -> rl
