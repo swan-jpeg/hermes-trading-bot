@@ -15,7 +15,7 @@
 ### 0.1 Projectlocatie
 - Repo: `~/trading-bot/`
 - Package: `hermes_bot/` (Python 3.11+, `uv`, `ruff`, `pytest`)
-- Kennisbron (architectuur): `~/obsidian-vault/TradingBot/` (13 genummerde noten)
+- Kennisbron (architectuur): de Obsidian-noten in de vault (13 genummerde noten)
 - Web-interface draait op poort 9124 (`hermes_bot/webui.py`)
 
 ### 0.2 Harde regels voor de codeer-agent
@@ -281,4 +281,4 @@ T1 (data) ──► T2 (sentiment) ──► T3 (audio) ──► T4 (video)
 ---
 
 ## 7. Klaar? Volgende stap
-Als alle taken groen zijn, is de bot klaar voor **paper trading** (T7) en daarna pas live met harde risicogrenzen. Zie `~/obsidian-vault/TradingBot/13-Roadmap-Implementatie.md` voor de volledige roadmap.
+Als alle taken groen zijn, is de bot klaar voor **paper trading** (T7) en daarna pas live met harde risicogrenzen. Zie de roadmap-noten in de vault voor de volledige roadmap.
