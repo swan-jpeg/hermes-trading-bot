@@ -100,6 +100,10 @@ def fetch_prices(cfg: BacktestConfig) -> pd.DataFrame:
         prices = prices[prices.index <= pd.Timestamp(cfg.end)]
     if prices.empty:
         raise ValueError(f"geen data voor {cfg.asset} in gekozen periode")
+    # Drop onvolledige/NaN rijen (bv. de actuele handelsdag die niet is afgesloten).
+    prices = prices.dropna()
+    if prices.empty:
+        raise ValueError(f"geen geldige data voor {cfg.asset} in gekozen periode")
     return prices
 
 

@@ -14,8 +14,7 @@ Modulaire multi-asset AI-trading-bot (Python). Doel: **goede winst** én
          → RL-besluitvorming + Monte Carlo/risico → executie (paper/live)
 ```
 
-Zie `~/obsidian-vault/TradingBot/` voor de volledige architectuurnotes, of
-`PLAN-QWEN.md` voor het implementatieplan.
+Zie `PLAN-QWEN.md` voor het implementatieplan.
 
 ## Snelle start
 

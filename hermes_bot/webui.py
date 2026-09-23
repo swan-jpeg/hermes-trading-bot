@@ -10,6 +10,7 @@ Zelfstandig met stdlib + markdown-it-py. Gebruik:
 from __future__ import annotations
 
 import html
+import os
 import subprocess
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -18,7 +19,8 @@ from pathlib import Path
 from markdown_it import MarkdownIt
 
 ROOT = Path(__file__).resolve().parent.parent
-VAULT = Path("/home/olivier/obsidian-vault")
+# Optionele pad naar een Obsidian-vault (alleen lokaal; placeholder voor publicatie).
+VAULT = Path(os.environ.get("HERMES_OBSIDIAN_VAULT", ""))
 PORT = 9124
 
 _md = MarkdownIt("commonmark", {"html": True}).enable("table")
