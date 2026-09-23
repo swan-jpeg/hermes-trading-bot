@@ -3,120 +3,96 @@ from __future__ import annotations
 
 import numpy as np
 
+from hermes_bot.portfolio import PortfolioState
+from hermes_bot.rl import RulePolicy
 from hermes_bot.rl.env import TradingEnv
 
 
-def test_trading_env_creation() -> None:
-    """Test that TradingEnv is created correctly."""
-    # For now we only test whether the class can be imported and created
-    # The real implementation requires more complex mocking
-    
-    # Test aanmaken (dummy)
+def _make_env(n: int = 100) -> TradingEnv:
+    prices = np.linspace(100, 150, n)
+    signals = [{"sentiment": 0.5, "zekerheid": 0.8, "kwaliteit": 0.7}] * n
+    return TradingEnv(
+        prices=prices,
+        fusion_signals=signals,
+        portfolio_state=PortfolioState(cash=100_000.0),
+        risk_engine=None,
+        rule_policy=RulePolicy(),
+        max_steps=n,
+    )
+
+
+def test_env_observation_shape() -> None:
+    """The observation is a 9-dim vector."""
+    env = _make_env()
+    obs, _ = env.reset()
+    assert obs.shape == (9,)
+    assert obs.dtype == np.float32
+
+
+def test_env_observation_values() -> None:
+    """Sentiment/certainty/quality come from the fusion signal."""
+    env = _make_env()
+    obs, _ = env.reset()
+    assert abs(float(obs[0]) - 0.5) < 1e-6  # sentiment
+    assert abs(float(obs[1]) - 0.8) < 1e-6  # certainty
+    assert abs(float(obs[2]) - 0.7) < 1e-6  # quality
+
+
+def test_env_buy_sets_allocation() -> None:
+    """A BUY action opens a position (allocation > 0)."""
+    env = _make_env()
+    env.reset()
+    obs, _reward, _done, _trunc, _info = env.step(1)  # BUY
+    assert float(obs[6]) > 0.0  # allocation
+
+
+def test_env_sell_closes_position() -> None:
+    """A SELL action closes the position (allocation -> 0)."""
+    env = _make_env()
+    env.reset()
+    env.step(1)  # BUY
+    obs, _reward, _done, _trunc, _info = env.step(2)  # SELL
+    assert float(obs[6]) == 0.0  # allocation
+
+
+def test_env_pnl_tracks_price() -> None:
+    """Unrealized P&L rises as the price rises while holding."""
+    env = _make_env()
+    env.reset()
+    env.step(1)  # BUY at ~100
+    for _ in range(20):
+        obs, _r, _d, _t, _i = env.step(0)  # HOLD
+    assert float(obs[4]) > 0.0  # positive P&L
+
+
+def test_env_episode_ends() -> None:
+    """The episode ends at max_steps."""
+    env = _make_env(n=10)
+    env.reset()
+    done = False
+    for _ in range(20):
+        _obs, _r, done, _t, _i = env.step(0)
+        if done:
+            break
+    assert done
+
+
+def test_env_invalid_action_raises() -> None:
+    """An invalid action raises ValueError."""
+    env = _make_env()
+    env.reset()
     try:
-        # Mock objects (dummy for now)
-        class MockFusionSignal:
-            pass
-        
-        class MockPortfolioState:
-            pass
-        
-        class MockRiskEngine:
-            pass
-        
-        class MockRulePolicy:
-            pass
-        
-        # Test aanmaken
-        env = TradingEnv(
-            fusion_signal=MockFusionSignal(),
-            portfolio_state=MockPortfolioState(),
-            risk_engine=MockRiskEngine(),
-            rule_policy=MockRulePolicy()
-        )
-        
-        # Check that the spaces are correct
-        assert hasattr(env, 'action_space')
-        assert hasattr(env, 'observation_space')
-        assert env.action_space.n == 3  # HOLD/BUY/SELL
-        assert env.observation_space.shape == (9,)  # 9-dimensionale vector
-    except Exception:
-        # If there is an error, we test whether the file can at least be imported
-        # This is sufficient for T6
+        env.step(99)
+        raise AssertionError("moest ValueError geven")
+    except ValueError:
         pass
 
 
-def test_trading_env_reset() -> None:
-    """Test dat reset werkt."""
-    # Test reset (dummy)
-    try:
-        # Mock objecten
-        class MockFusionSignal:
-            pass
-        
-        class MockPortfolioState:
-            pass
-        
-        class MockRiskEngine:
-            pass
-        
-        class MockRulePolicy:
-            pass
-        
-        env = TradingEnv(
-            fusion_signal=MockFusionSignal(),
-            portfolio_state=MockPortfolioState(),
-            risk_engine=MockRiskEngine(),
-            rule_policy=MockRulePolicy()
-        )
-        
-        # Test reset
-        obs, info = env.reset()
-        
-        # Check that the observation is correct
-        assert isinstance(obs, np.ndarray)
-        assert obs.shape == (9,)
-        assert 'info' in info
-    except Exception:
-        # If there is an error, we test whether the file can at least be imported
-        # This is sufficient for T6
-        pass
-
-
-def test_trading_env_step() -> None:
-    """Test dat step werkt."""
-    # Test step (dummy)
-    try:
-        # Mock objecten
-        class MockFusionSignal:
-            pass
-        
-        class MockPortfolioState:
-            pass
-        
-        class MockRiskEngine:
-            pass
-        
-        class MockRulePolicy:
-            pass
-        
-        env = TradingEnv(
-            fusion_signal=MockFusionSignal(),
-            portfolio_state=MockPortfolioState(),
-            risk_engine=MockRiskEngine(),
-            rule_policy=MockRulePolicy()
-        )
-        
-        # Test step with a valid action
-        obs, reward, done, truncated, info = env.step(1)  # BUY
-        
-        # Controleer resultaten
-        assert isinstance(obs, np.ndarray)
-        assert obs.shape == (9,)
-        assert isinstance(reward, (int, float))
-        assert isinstance(done, bool)
-        assert isinstance(truncated, bool)
-        assert 'info' in info
-    except Exception:
-        # If there is an error, we test whether the file can at least be imported
-        # This is sufficient for T6
-        pass
+def test_env_reward_is_float() -> None:
+    """The reward is a finite float."""
+    env = _make_env()
+    env.reset()
+    env.step(1)
+    _obs, reward, _d, _t, _i = env.step(0)
+    assert isinstance(reward, float)
+    assert np.isfinite(reward)

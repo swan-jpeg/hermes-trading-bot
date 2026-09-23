@@ -1,4 +1,14 @@
-"""LAAG 6: RL-omgeving volgens spec (sectie 4)."""
+"""LAYER 6: RL environment per spec (section 4).
+
+A working Gymnasium environment for training the RL decision layer with
+stable-baselines3. The observation vector is built from REAL values (fusion
+signal, portfolio state, Monte Carlo risk) and the reward uses the existing
+`compute_reward` function (return - drawdown penalty - turnover penalty).
+
+The environment steps through a price series; each step the agent sees the
+current market/fusion/portfolio state, proposes an action, and the environment
+applies it to the portfolio and returns the reward.
+"""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -7,106 +17,177 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
+from hermes_bot.rl import compute_reward
+from hermes_bot.schemas import Action
+
 if TYPE_CHECKING:
     from hermes_bot.portfolio import PortfolioState
-    from hermes_bot.rl import RLFusionModel
-    from hermes_bot.schemas import FusionSignal
+
+# Action mapping: 0=HOLD, 1=BUY, 2=SELL
+_ACTION_TO_ENUM = {0: Action.HOLD, 1: Action.BUY, 2: Action.SELL}
 
 
 class TradingEnv(gym.Env):
     """Gymnasium environment for trading RL.
 
-    Volgt de specificaties uit sectie 4 van het plan:
-    - Observatie: 9-dimensionale vector
-    - Actie: discrete (HOLD/BUY/SELL) met allocatie-gewicht
-    - Reward: compute_reward functie
+    Observation (9-dim, per section 4.1):
+        0: sentiment (fusion) -1..1
+        1: certainty (fusion) 0..1
+        2: quality (fusion) 0..1
+        3: regime 0..3 (bull/bear/highvol/crash)
+        4: unrealized P&L % -1..+5
+        5: holding days 0..N
+        6: current allocation 0..1
+        7: VaR95 (portfolio) -1..0
+        8: crash probability 0..1
+
+    Action: discrete (HOLD/BUY/SELL). Reward: compute_reward.
     """
 
-    def __init__(self, fusion_signal: FusionSignal, portfolio_state: PortfolioState, 
-                 risk_engine, rule_policy: RLFusionModel) -> None:
+    def __init__(
+        self,
+        prices: np.ndarray,
+        fusion_signals: list[dict],
+        portfolio_state: PortfolioState,
+        risk_engine,
+        rule_policy,
+        max_steps: int = 1000,
+        seed: int = 42,
+    ) -> None:
         super().__init__()
-        
-        # Define the action space: HOLD/BUY/SELL
+        self.prices = np.asarray(prices, dtype=float)
+        self.fusion_signals = fusion_signals
+        self.portfolio = portfolio_state
+        self.risk_engine = risk_engine
+        self.rule_policy = rule_policy
+        self.max_steps = max_steps
+        self.rng = np.random.default_rng(seed)
+
         self.action_space = spaces.Discrete(3)  # 0: HOLD, 1: BUY, 2: SELL
-        
-        # Define the observation space: 9-dimensional vector
-        # See section 4.1 in PLAN-QWEN.md
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(9,), dtype=np.float32
         )
-        
-        # Interne state
-        self.fusion_signal = fusion_signal
-        self.portfolio_state = portfolio_state
-        self.risk_engine = risk_engine
-        self.rule_policy = rule_policy
+
         self.current_step = 0
-        self.max_steps = 1000  # Beperk het aantal stappen
+        self.entry_price: float | None = None
+        self.entry_step: int | None = None
+        self.peak_price: float = 0.0
+        self.holding_days = 0
+        self.allocation = 0.0
+        self.var_95 = 0.0
+        self.crash_prob = 0.0
+        self.regime_code = 0.0
+        self._returns: list[float] = []
+        self._drawdowns: list[float] = []
+        self._turnover = 0.0
 
     def reset(self, seed=None, options=None):
         """Reset the environment to the initial state."""
         super().reset(seed=seed)
         self.current_step = 0
-        # Reset the state to initial
-        observation = self._get_observation()
-        return observation, {}
+        self.entry_price = None
+        self.entry_step = None
+        self.peak_price = 0.0
+        self.holding_days = 0
+        self.allocation = 0.0
+        self.var_95 = 0.0
+        self.crash_prob = 0.0
+        self.regime_code = 0.0
+        self._returns = []
+        self._drawdowns = []
+        self._turnover = 0.0
+        return self._get_observation(), {}
 
     def step(self, action: int):
         """Take a step in the environment."""
-        self.current_step += 1
-        
-        # Validate the action
-        if action not in [0, 1, 2]:  # HOLD, BUY, SELL
+        if action not in (0, 1, 2):
             raise ValueError(f"Invalid action: {action}")
-        
-        # Simulate the impact of the action (dummy implementation)
-        # In a real implementation this would update the portfolio state
-        
-        # Bereken reward
-        reward = self._compute_reward(action)
-        
-        # Determine whether the episode is over
-        done = self.current_step >= self.max_steps
-        
-        # Verkrijg nieuwe observatie
-        observation = self._get_observation()
-        
-        # Extra info
-        info = {}
-        
-        return observation, reward, done, False, info
+
+        price = self._current_price()
+        prev_price = self.prices[max(0, self.current_step - 1)] if self.current_step > 0 else price
+
+        # Apply the action to the portfolio.
+        self._apply_action(int(action), price)
+
+        # Daily return of the portfolio (allocation * price move).
+        price_ret = (price - prev_price) / prev_price if prev_price > 0 else 0.0
+        port_ret = self.allocation * price_ret
+        self._returns.append(port_ret)
+
+        # Track drawdown from peak equity.
+        equity = 1.0 + float(np.sum(self._returns))
+        self.peak_price = max(self.peak_price, equity)
+        dd = equity / self.peak_price - 1.0 if self.peak_price > 0 else 0.0
+        self._drawdowns.append(dd)
+
+        # Advance the step counter.
+        self.current_step += 1
+        if self.entry_price is not None:
+            self.holding_days += 1
+
+        # Reward via the existing compute_reward function.
+        reward = compute_reward(
+            returns=self._returns[-1:],
+            drawdowns=self._drawdowns[-1:],
+            turnover=self._turnover,
+        )
+
+        done = self.current_step >= self.max_steps or self.current_step >= len(self.prices) - 1
+        return self._get_observation(), float(reward), done, False, {}
+
+    def _apply_action(self, action: int, price: float) -> None:
+        """Apply the action to the portfolio state."""
+        if action == 1:  # BUY
+            if self.entry_price is None:
+                self.entry_price = price
+                self.entry_step = self.current_step
+                self.holding_days = 0
+                self.allocation = 0.5  # half position to start
+                self._turnover += 0.5
+        elif action == 2:  # SELL
+            if self.entry_price is not None:
+                self.allocation = 0.0
+                self.entry_price = None
+                self.entry_step = None
+                self.holding_days = 0
+                self._turnover += 0.5
+
+    def _current_price(self) -> float:
+        return float(self.prices[min(self.current_step, len(self.prices) - 1)])
 
     def _get_observation(self) -> np.ndarray:
-        """Genereer observatie vector volgens sectie 4.1."""
-        # This implementation is simplified for T6
-        # In a real implementation we would use the real values
-        
-        # The observation vector has 9 dimensions:
-        # 0: sentiment (fusie) -1..1
-        # 1: zekerheid (fusie) 0..1
-        # 2: kwaliteit (fusie) 0..1
-        # 3: regime 0..3 (bull/bear/highvol/crash)
-        # 4: ongerealiseerde P&L % -1..+5
-        # 5: holding-dagen 0..N
-        # 6: huidige allocatie 0..1
-        # 7: VaR95 (portfolio) -1..0
-        # 8: crash-kans 0..1
-        
-        # Dummy values for now
+        """Build the 9-dim observation vector from real values."""
+        fusion = self._current_fusion()
+        sentiment = float(fusion.get("sentiment", 0.0))
+        certainty = float(fusion.get("zekerheid", 0.0))
+        quality = float(fusion.get("kwaliteit", 0.0))
+
+        # Unrealized P&L % if holding.
+        pnl = 0.0
+        if self.entry_price and self.entry_price > 0:
+            pnl = (self._current_price() - self.entry_price) / self.entry_price
+
         return np.array([
-            0.5,  # sentiment
-            0.8,  # zekerheid
-            0.7,  # kwaliteit
-            0.0,  # regime (bull)
-            0.0,  # ongerealiseerde P&L %
-            0.0,  # holding-dagen
-            0.0,  # huidige allocatie
-            0.0,  # VaR95
-            0.0   # crash-kans
+            sentiment,          # 0
+            certainty,          # 1
+            quality,            # 2
+            self.regime_code,   # 3
+            pnl,                # 4
+            float(self.holding_days),  # 5
+            self.allocation,    # 6
+            self.var_95,        # 7
+            self.crash_prob,    # 8
         ], dtype=np.float32)
 
-    def _compute_reward(self, action: int) -> float:
-        """Bereken reward volgens sectie 4.3."""
-        # For now a dummy implementation
-        # In a real implementation we would use compute_reward
-        return 0.0
+    def _current_fusion(self) -> dict:
+        """Get the fusion signal for the current step (or a neutral default)."""
+        if self.fusion_signals and self.current_step < len(self.fusion_signals):
+            return self.fusion_signals[self.current_step]
+        return {"sentiment": 0.0, "zekerheid": 0.5, "kwaliteit": 0.5}
+
+    def set_risk_metrics(self, var_95: float, crash_prob: float, regime: str) -> None:
+        """Inject Monte Carlo / regime values from the risk engine (per step)."""
+        self.var_95 = float(var_95)
+        self.crash_prob = float(crash_prob)
+        regime_map = {"bull": 0.0, "bear": 1.0, "highvol": 2.0, "crash": 3.0}
+        self.regime_code = regime_map.get(regime, 0.0)
