@@ -37,7 +37,7 @@ class FundamentalAgent:
         )
 
     def _score_fundamentals(self, features: dict) -> dict[str, float]:
-        """Waarde/quality/groei/marges → subscores 0..1 (hoger = beter)."""
+        """Value/quality/growth/margins → subscores 0..1 (higher = better)."""
         pe = features.get("pe", 20.0)
         growth = features.get("growth", 0.0)
         margin = features.get("margin", 0.0)

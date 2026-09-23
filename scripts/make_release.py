@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Maak een GitHub Release met download-artefacten (core + full).
+"""Create a GitHub Release with download artifacts (core + full).
 
 - Bepaalt de volgende versie (v0.1.0, v0.2.0, ...) uit de laatste tag.
 - Bouwt twee zips:
@@ -28,7 +28,7 @@ import zipfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-# Kernmodules die in de "core"-zip zitten (risk engine + backtest + schemas).
+# Core modules that go in the "core" zip (risk engine + backtest + schemas).
 CORE_MODULES = [
     "hermes_bot/__init__.py",
     "hermes_bot/schemas.py",
@@ -81,7 +81,7 @@ def _get_github_token() -> str | None:
 
 
 def _next_version() -> str:
-    """Bepaal de volgende versie uit de laatste tag (v0.1.0 -> v0.2.0)."""
+    """Determine the next version from the latest tag (v0.1.0 -> v0.2.0)."""
     tags = [t for t in _git("tag", "--list", "v*").splitlines() if t]
     if not tags:
         return "v0.1.0"
@@ -107,7 +107,7 @@ def _project_files(root: pathlib.Path, only: list[str] | None = None) -> list[pa
         if rel.name in (".env",) or rel.name.endswith("_key.txt"):
             continue
         if only is not None:
-            # Core: alleen bestanden die onder een core-pad vallen.
+            # Core: only files that fall under a core path.
             if not any(str(rel) == o or str(rel).startswith(o.rstrip("/") + "/")
                        for o in only):
                 continue
@@ -116,7 +116,7 @@ def _project_files(root: pathlib.Path, only: list[str] | None = None) -> list[pa
 
 
 def _build_zip(root: pathlib.Path, only: list[str] | None, version: str, kind: str) -> bytes:
-    """Bouw een zip (bytes) van het project (core of full)."""
+    """Build a zip (bytes) of the project (core or full)."""
     buf = io.BytesIO()
     prefix = f"hermes-trading-bot-{version}-{kind}"
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -131,7 +131,7 @@ def _build_zip(root: pathlib.Path, only: list[str] | None, version: str, kind: s
 
 
 def _upload_asset(release_id: str, token: str, path: pathlib.Path) -> None:
-    """Upload een artefact naar een release (GitHub uploads API)."""
+    """Upload an artifact to a release (GitHub uploads API)."""
     data = path.read_bytes()
     upload_base = (
         "https://uploads.github.com/repos/swan-jpeg/hermes-trading-bot/"
@@ -149,7 +149,7 @@ def _upload_asset(release_id: str, token: str, path: pathlib.Path) -> None:
 
 
 def _update_readme(version: str, core_name: str, full_name: str) -> None:
-    """Werk de README-versietabel bij (voeg nieuwe rij toe bovenaan)."""
+    """Update the README version table (add a new row at the top)."""
     readme = ROOT / "README.md"
     text = readme.read_text()
     row = (f"| {version} | [core](https://github.com/swan-jpeg/hermes-trading-bot/"
@@ -158,10 +158,10 @@ def _update_readme(version: str, core_name: str, full_name: str) -> None:
            f"releases/download/{version}/{full_name}) |")
     marker = "<!-- RELEASES -->"
     if marker in text:
-        # Vervang de tabel: nieuwe rij direct na de separator (vóór de marker).
+        # Replace the table: new row right after the separator (before the marker).
         lines = text.splitlines()
         idx = next(i for i, ln in enumerate(lines) if marker in ln)
-        # Zoek de separator vóór de marker (de tabel-header).
+        # Find the separator before the marker (the table header).
         insert_at = None
         for i in range(idx - 1, max(0, idx - 6), -1):
             if lines[i].startswith("| ---"):
@@ -172,7 +172,7 @@ def _update_readme(version: str, core_name: str, full_name: str) -> None:
         lines.insert(insert_at, row)
         readme.write_text("\n".join(lines) + "\n")
     else:
-        # Voeg een Releases-sectie toe vóór "## License".
+        # Add a Releases section before "## License".
         section = (
             f"## Releases\n\n"
             f"Download the latest version below. Each release keeps its own "
@@ -195,7 +195,7 @@ def main() -> int:
     version = args.version or _next_version()
     print(f"Versie: {version}")
 
-    # Bouw de twee zips.
+    # Build the two zips.
     core_zip = _build_zip(ROOT, CORE_MODULES, version, "core")
     full_zip = _build_zip(ROOT, None, version, "full")
     core_name = f"hermes-trading-bot-{version}-core.zip"
@@ -212,7 +212,7 @@ def main() -> int:
         print("⚠ Geen GitHub-token gevonden in ~/.git-credentials.")
         return 2
 
-    # Maak de release aan.
+    # Create the release.
     req = urllib.request.Request(
         "https://api.github.com/repos/swan-jpeg/hermes-trading-bot/releases",
         method="POST")
@@ -246,7 +246,7 @@ def main() -> int:
     _upload_asset(release_id, token, core_path)
     _upload_asset(release_id, token, full_path)
 
-    # Werk de README bij en commit.
+    # Update the README and commit.
     _update_readme(version, core_name, full_name)
     _git("add", "README.md")
     _git("-c", "user.email=bot@local", "-c", "user.name=bot",

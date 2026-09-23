@@ -1,13 +1,13 @@
 """LAYER 6: backtest engine — the mandatory gate before money. [[13]]
 
-Real event-driven backtest that uses the RISK ENGINE (RiskEngine) for
-position sizing, drawdown-guard and crash resistance, and compares with a
-buy-and-hold benchmark. Goal: good profit AND resistance against market crashes.
+A real event-driven backtest that uses the RISK ENGINE (RiskEngine) for
+position sizing, drawdown guard and crash resistance, and compares against a
+buy-and-hold benchmark. Goal: good returns AND resilience against market crashes.
 
-Strategy interface:
+Strategie-interface:
     def decide(self, ts_idx, row, portfolio) -> RLRawDecision
-Each strategy returns a raw decision; the engine always runs it
-through a RiskEngine (RL proposes, Risk approves) — just like live.
+Elke strategie retourneert een ruw besluit; de engine laat dat altijd
+door een RiskEngine lopen (RL voorstelt, Risk keurt goed) — net als live.
 """
 from __future__ import annotations
 
@@ -61,11 +61,11 @@ class Strategy:
 
 
 class VolTargetStrategy(Strategy):
-    """Crash-resistant strategy: volatility targeting + drawdown-guard.
+    """Crash-veilige strategie: volatiliteit-targeting + drawdown-guard.
 
-    Goes fully into an asset at low vol, scales back at high vol
-    (crash resistance), takes profit/loss via trailing rules. Uses the
-    RulePolicy-exit logic for price-driven profit taking.
+    Gaat volledig in een asset bij lage vol, schaalt terug bij hoge vol
+    (crashweerstand), neemt winst/verlies via trailing rules. Gebruikt de
+    RulePolicy-exit-logica voor prijs-gedreven winst nemen.
     """
 
     name = "vol_target"

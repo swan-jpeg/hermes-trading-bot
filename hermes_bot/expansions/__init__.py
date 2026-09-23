@@ -219,7 +219,7 @@ class RegionalScorer:
     """Analyses regional scores from news/alerts."""
 
     def __init__(self) -> None:
-        # Regionale scores: veiligheid, tevredenheid, sociale certainty, bedrijfseconomisch
+        # Regional scores: safety, satisfaction, social security, business-economic
         self.scores = {
             "veiligheid": 0.0,
             "tevredenheid": 0.0,

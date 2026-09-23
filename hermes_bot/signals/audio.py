@@ -1,4 +1,4 @@
-"""LAAG 3: audio-analyse (spraak->tekst, sentiment, prosodie).
+"""LAYER 3: audio analysis (speech->text, emotion, prosody).
 
 Echte model-integratie met offline-fallback:
 - Transcript: faster-whisper (WhisperModel)
@@ -26,7 +26,7 @@ class AudioAnalyzer:
     """Analyses audio files into transcript, emotion and prosody."""
 
     def __init__(self, use_heavy_models: bool = False) -> None:
-        """use_heavy_models: laad zware modellen (whisper/sentiment). Standaard
+        """use_heavy_models: load heavy models (whisper/emotion). Default
         uit zodat de pipeline snel en offline-safe blijft; zet aan op een
         machine waar de modellen betrouwbaar draaien."""
         self.use_heavy_models = use_heavy_models
@@ -131,7 +131,7 @@ class AudioAnalyzer:
         }
 
     def _get_prosody(self, audio_path: str) -> dict[str, float]:
-        """Prosody via openSMILE (eGeMAPS) + librosa."""
+        """Prosodie via openSMILE (eGeMAPS) + librosa."""
         import librosa
 
         y, sr = librosa.load(audio_path, sr=16000, mono=True)

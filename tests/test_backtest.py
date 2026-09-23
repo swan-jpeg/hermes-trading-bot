@@ -31,4 +31,4 @@ def test_vol_target_never_fails() -> None:
     prices = _prices([100.0, 102.0, 99.0, 103.0, 105.0, 108.0, 106.0, 110.0, 112.0, 115.0])
     result = Backtester().run(prices, VolTargetStrategy({"entity": "asset"}))
     assert isinstance(result, BacktestResult)
-    assert result.max_drawdown <= 0.0  # drawdown is never positive
+    assert result.max_drawdown <= 0.0  # drawdown is nooit positief
