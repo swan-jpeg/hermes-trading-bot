@@ -1,4 +1,4 @@
-"""Demo-pipeline: doorloopt de hele architectuurketen.
+"""Demo pipeline: walks through the whole architecture chain.
 
 data -> fusie -> RL (prijs-bewust) -> risico (incl. Monte Carlo) -> executie (paper).
 
@@ -23,7 +23,7 @@ from hermes_bot.simulation import MonteCarloEngine
 
 
 def run_demo() -> dict:
-    """Simuleer een beslissingscyclus met een bestaande positie + Monte Carlo."""
+    """Simulate a decision cycle with an existing position + Monte Carlo."""
     # 0. Een bestaande open positie (entry 100, nu 118 -> +18%, boven take-profit 15%).
     pos = Position(
         entity="AAPL",
@@ -37,7 +37,7 @@ def run_demo() -> dict:
     portfolio = PortfolioState(cash=100_000.0, positions={"AAPL": pos}, regime="bull")
     current_price = 118.0
 
-    # 1. Fusie-inputs (zouden uit data-laag komen).
+    # 1. Fusion inputs (would come from the data layer).
     inputs = [
         {"source": "agent", "entity_id": "AAPL", "sentiment": 0.4, "confidence": 0.8},
         {"source": "market", "entity_id": "AAPL", "sentiment": 0.2, "confidence": 0.7},
@@ -52,7 +52,7 @@ def run_demo() -> dict:
     hist = rng.normal(0.0005, 0.02, 250)  # ~250 dagen historie
     mc = MonteCarloEngine(n_paths=5000).simulate(hist, horizon=30)
 
-    # 3. RL-besluit (prijs-bewust: ziet de positie + winst -> take-profit).
+    # 3. RL decision (price-aware: sees the position + profit -> take-profit).
     rl = RLFusionModel()
     decision = rl.decide(fusion.model_dump(), {"entity_id": "AAPL"}, portfolio, current_price)
 
@@ -60,12 +60,12 @@ def run_demo() -> dict:
     risk = RiskEngine({"risk": {"max_asset_weight": 0.10}})
     approval = risk.approve(decision, portfolio, mc)
 
-    # 5. Executie (paper) als goedgekeurd.
+    # 5. Execution (paper) if approved.
     fills: list[dict] = []
     if approval.approved:
         eng = ExecutionEngine(PaperBroker())
         target_qty = approval.target_alloc.get("AAPL", 0.0)
-        # Verkoop volledige positie bij exit; anders koop/verklein o.b.v. alloc.
+        # Sell the full position on exit; otherwise buy/reduce based on alloc.
         if decision.action.value == "sell" and decision.exit_reason.value != "none":
             side, qty = "sell", int(pos.qty)
         else:

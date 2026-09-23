@@ -1,4 +1,4 @@
-"""Tests voor het Backtest Control Panel (config/experiment/visualisatie-laag).
+"""Tests for the Backtest Control Panel (config/experiment/visualization layer).
 
 Dit test de INTERFACE-laag, niet de backtest-engine (die is ongewijzigd).
 Gebruikt echte data via yfinance waar mogelijk.
@@ -33,7 +33,7 @@ def test_single_backtest_runs() -> None:
 
 
 def test_best_worst_day_present() -> None:
-    """Best/worst dag en maand worden berekend (via bestaande data)."""
+    """Best/worst day and month are computed (via existing data)."""
     cfg = BacktestConfig(asset="SPY", years=2.0)
     d = run_backtest(cfg, return_log=True)
     assert "best_day" in d["metrics"]
@@ -42,7 +42,7 @@ def test_best_worst_day_present() -> None:
 
 
 def test_risk_toggles_change_config() -> None:
-    """Risk-component toggles zetten de juiste v2.1-flags."""
+    """Risk-component toggles set the right v2.1 flags."""
     cfg = BacktestConfig(asset="SPY", years=1.0, opportunity=False,
                         recovery=False, emergency_brake=False)
     rc = cfg.risk_config()["risk"]
@@ -52,7 +52,7 @@ def test_risk_toggles_change_config() -> None:
 
 
 def test_risk_engine_off_disables_all() -> None:
-    """Risk engine UIT zet alle mechanismen uit."""
+    """Risk engine OFF disables all mechanisms."""
     cfg = BacktestConfig(asset="SPY", years=1.0, risk_engine=False)
     rc = cfg.risk_config()["risk"]
     assert rc.get("_strategic_off") is True
@@ -72,7 +72,7 @@ def test_compare_two_to_five() -> None:
 
 
 def test_compare_rejects_wrong_count() -> None:
-    """Compare-mode weigert <2 of >5 configuraties."""
+    """Compare mode rejects <2 or >5 configurations."""
     try:
         run_compare([BacktestConfig()])
         raise AssertionError("moest weigeren bij 1 config")
@@ -91,7 +91,7 @@ def test_run_to_html_contains_charts() -> None:
 
 
 def test_compare_to_html_table() -> None:
-    """compare_to_html bevat een vergelijkingstabel."""
+    """compare_to_html contains a comparison table."""
     cfgs = [
         BacktestConfig(asset="SPY", years=1.0, vol_target=0.10, label="a", run_type="compare"),
         BacktestConfig(asset="SPY", years=1.0, vol_target=0.15, label="b", run_type="compare"),
@@ -103,7 +103,7 @@ def test_compare_to_html_table() -> None:
 
 
 def test_quick_experiments_defined() -> None:
-    """Quick experiments zijn voorgedefinieerd."""
+    """Quick experiments are predefined."""
     qe = quick_experiments()
     assert "vol_targets" in qe
     assert "assets" in qe
@@ -112,7 +112,7 @@ def test_quick_experiments_defined() -> None:
 
 
 def test_run_id_unique_and_reproducible() -> None:
-    """Zelfde config + tijd geeft een run-id; formaat klopt."""
+    """Same config + time gives a run id; the format is correct."""
     from hermes_bot.control_panel import make_run_id
     c1 = BacktestConfig(asset="SPY", years=1.0)
     c2 = BacktestConfig(asset="QQQ", years=1.0)

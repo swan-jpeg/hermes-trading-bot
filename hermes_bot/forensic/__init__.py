@@ -1,4 +1,4 @@
-"""Forensische backtest-harness voor de Risk Engine (ONVERANDERD).
+"""Forensic backtest harness for the Risk Engine (UNCHANGED).
 
 Doel: objectief vaststellen hoe de BESTAANDE RiskEngine drawdowns/crashes
 beperkt, zonder de engine te optimaliseren. Gebruikt een NEUTRALE strategie
@@ -32,11 +32,11 @@ OUT = Path(__file__).resolve().parent.parent.parent / "var" / "forensic"
 
 
 # ---------------------------------------------------------------------------
-# NEUTRALE STRATEGIE — stelt altijd 100% long voor, zodat de RiskEngine de
-# enige rem is. Dit isoleert de RiskEngine volledig.
+# NEUTRAL STRATEGY — always proposes 100% long, so the RiskEngine is the
+# only brake. This isolates the RiskEngine completely.
 # ---------------------------------------------------------------------------
 class ConstantLongStrategy:
-    """Stelt elke dag 100% long voor (zekerheid 1.0). RiskEngine beslist."""
+    """Proposes 100% long every day (certainty 1.0). The RiskEngine decides."""
 
     name = "constant_long"
 
@@ -56,7 +56,7 @@ class ConstantLongStrategy:
 # SCENARIO-GENERATOREN — deterministisch, reproduceerbaar
 # ---------------------------------------------------------------------------
 def make_scenario(name: str, n: int = 400, seed: int = 7) -> pd.DataFrame:
-    """Genereer een deterministisch prijsscenario met een specifiek regime.
+    """Generate a deterministic price scenario with a specific regime.
 
     De drift is dominant over de ruis zodat elk regime de bedoelde richting
     heeft (bull stijgt, bear daalt, etc.) — reproduceerbaar via seed.
@@ -100,7 +100,7 @@ def make_scenario(name: str, n: int = 400, seed: int = 7) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
-# FORENSISCHE BACKTESTER — logt elke risicobeslissing
+# FORENSIC BACKTESTER — logs every risk decision
 # ---------------------------------------------------------------------------
 @dataclass
 class RiskLogEntry:
@@ -165,7 +165,7 @@ def run_forensic(
     mc_every: int = 20,
     seed: int = 42,
 ) -> ForensicResult:
-    """Draai de RiskEngine (ONVERANDERD) over een prijsreeks met logging."""
+    """Run the RiskEngine (UNCHANGED) over a price series with logging."""
     risk = RiskEngine(risk_config)
     strategy = ConstantLongStrategy()
 
@@ -207,7 +207,7 @@ def run_forensic(
 
         decision = strategy.decide(i, prices.iloc[i], portfolio)
 
-        # Monte Carlo periodiek (zoals in de echte backtest-engine).
+        # Monte Carlo periodically (as in the real backtest engine).
         mc = None
         if len(daily_returns) >= 30 and i % mc_every == 0:
             try:
@@ -217,7 +217,7 @@ def run_forensic(
 
         approval = risk.approve(decision, portfolio, mc)
 
-        # Execute (target-volgend, fail-closed) — zelfde logica als backtest.
+        # Execute (target-following, fail-closed) — same logic as the backtest.
         total_value = cash + qty * price
         target_weight = (
             approval.target_alloc.get("asset", 0.0) if approval.approved else 0.0
@@ -280,7 +280,7 @@ def run_forensic(
 # ABLATION — mechanismen uitschakelen via config (code blijft onveranderd)
 # ---------------------------------------------------------------------------
 def ablation_configs(base: dict) -> dict[str, dict]:
-    """Config-varianten die één mechanisme uitschakelen."""
+    """Config variants that disable one mechanism."""
     risk = base.get("risk", {})
     return {
         "full": base,
@@ -292,7 +292,7 @@ def ablation_configs(base: dict) -> dict[str, dict]:
 
 
 def run_ablation(prices: pd.DataFrame, base: dict, name: str) -> dict:
-    """Draai alle ablations en geef metrics per variant."""
+    """Run all ablations and return metrics per variant."""
     out = {}
     for label, cfg in ablation_configs(base).items():
         r = run_forensic(prices, cfg, name=f"{name}_{label}")
@@ -304,16 +304,16 @@ def run_ablation(prices: pd.DataFrame, base: dict, name: str) -> dict:
 # LEAKAGE-CONTROLES
 # ---------------------------------------------------------------------------
 def check_leakage(prices: pd.DataFrame, log: list[RiskLogEntry]) -> dict:
-    """Controleer op look-ahead / future-informatie in de beslissingen."""
+    """Check for look-ahead / future information in the decisions."""
     findings = []
-    # MC gebruikt alleen daily_returns tot en met de VORIGE dag (geen look-ahead).
+    # MC uses only daily_returns up to and including the PREVIOUS day (no look-ahead).
     # Controleer dat var_95 pas verschijnt na dag 30 (warm-up).
     first_mc = next((e for e in log if e.var_95 != 0.0), None)
     if first_mc is not None:
-        # MC wordt pas berekend als len(daily_returns)>=30 -> dag 30+.
+        # MC is only computed once len(daily_returns)>=30 -> day 30+.
         pass  # warm-up is correct in de code
-    # Geen toekomstige prijzen: exposure op dag i gebruikt alleen close[i].
-    # Survivorship: single-asset, geen delisting-model -> n.v.t. hier.
+    # No future prices: exposure on day i uses only close[i].
+    # Survivorship: single-asset, no delisting model -> n/a here.
     return {"findings": findings, "note": "single-asset, geen delisting-model"}
 
 
@@ -321,7 +321,7 @@ def check_leakage(prices: pd.DataFrame, log: list[RiskLogEntry]) -> dict:
 # RUNNER
 # ---------------------------------------------------------------------------
 def run_all() -> dict:
-    """Voer de volledige forensische test uit en sla alles op."""
+    """Run the full forensic test and save everything."""
     OUT.mkdir(parents=True, exist_ok=True)
     cfg = load_config()
     risk_cfg = {"risk": cfg.get("risk", {})}
@@ -345,11 +345,11 @@ def run_all() -> dict:
             [e.__dict__ for e in r.log], default=str, indent=1
         ))
 
-    # Ablations op het fast_crash-scenario (meest informatief).
+    # Ablations on the fast_crash scenario (most informative).
     crash_prices = make_scenario("fast_crash")
     ablations = run_ablation(crash_prices, risk_cfg, "fast_crash")
 
-    # Leakage-check op bull + fast_crash.
+    # Leakage check on bull + fast_crash.
     bull_prices = make_scenario("bull")
     bull_log = run_forensic(bull_prices, risk_cfg).log
     crash_log = run_forensic(crash_prices, risk_cfg).log

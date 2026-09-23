@@ -1,4 +1,4 @@
-"""LAAG 3: sentiment-analyse via FinBERT of lexicon fallback."""
+"""LAYER 3: sentiment analysis via FinBERT or lexicon fallback."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 
 class SentimentAnalyzer:
-    """Analyseert nieuws/reports naar sentiment-score met confidence."""
+    """Analyses news/reports into a sentiment score with confidence."""
 
     def __init__(self) -> None:
         self._finbert_model = None
@@ -19,8 +19,8 @@ class SentimentAnalyzer:
         self._lexicon = self._load_lexicon()
 
     def _load_lexicon(self) -> dict[str, float]:
-        """Laad een eenvoudige lexicon voor offline-fallback."""
-        # Simpele woord-gevoelens (voor offline fallback)
+        """Load a simple lexicon for offline fallback."""
+        # Simple word sentiments (for offline fallback)
         return {
             "good": 0.5,
             "bad": -0.5,
@@ -48,7 +48,7 @@ class SentimentAnalyzer:
         }
 
     def analyze(self, texts: list[str]) -> list[AlertSignal]:
-        """Analyseer een lijst van teksten naar sentiment-scores.
+        """Analyse a list of texts into sentiment scores.
 
         Gebruikt FinBERT indien beschikbaar, anders lexicon fallback.
         """
@@ -65,16 +65,16 @@ class SentimentAnalyzer:
                         device=-1,  # CPU; GPU via device=0 als torch beschikbaar is
                     )
                 
-                # Analyseer met FinBERT
+                # Analyse with FinBERT
                 result = self._finbert_model(text)
                 label = result[0]['label']
                 sentiment = result[0]['score'] if label == 'POSITIVE' else -result[0]['score']
                 confidence = result[0]['score']
             except Exception:
-                # Fallback naar lexicon als FinBERT niet beschikbaar is
+                # Fall back to lexicon if FinBERT is not available
                 sentiment, confidence = self._analyze_with_lexicon(text)
             
-            # Maak AlertSignal aan
+            # Create an AlertSignal
             signal = AlertSignal(
                 source=SourceKind.ALERT,
                 source_name="sentiment",
@@ -92,7 +92,7 @@ class SentimentAnalyzer:
         return results
 
     def _analyze_with_lexicon(self, text: str) -> tuple[float, float]:
-        """Analyseer met lexicon fallback."""
+        """Analyse with lexicon fallback."""
         words = text.lower().split()
         scores = []
         
@@ -106,7 +106,7 @@ class SentimentAnalyzer:
             return 0.0, 0.0  # Neutraal als geen woorden gevonden
         
         avg_score = sum(scores) / len(scores)
-        # Confidence gebaseerd op aantal woorden en het aantal positieve/negatieve woorden
+        # Confidence based on word count and the number of positive/negative words
         confidence = min(len(scores) / 10.0, 1.0)  # Max 1.0 confidence
         
         return avg_score, confidence

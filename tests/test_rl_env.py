@@ -1,4 +1,4 @@
-"""Tests voor RL-omgeving (T6)."""
+"""Tests for the RL environment (T6)."""
 from __future__ import annotations
 
 import numpy as np
@@ -7,13 +7,13 @@ from hermes_bot.rl.env import TradingEnv
 
 
 def test_trading_env_creation() -> None:
-    """Test dat TradingEnv correct wordt aangemaakt."""
-    # Voor nu testen we alleen of de klasse kan worden geïmporteerd en aangemaakt
+    """Test that TradingEnv is created correctly."""
+    # For now we only test whether the class can be imported and created
     # De echte implementatie vereist meer complexe mocking
     
     # Test aanmaken (dummy)
     try:
-        # Mock objecten (voor nu dummy)
+        # Mock objects (dummy for now)
         class MockFusionSignal:
             pass
         
@@ -34,14 +34,14 @@ def test_trading_env_creation() -> None:
             rule_policy=MockRulePolicy()
         )
         
-        # Controleer dat de ruimtes correct zijn
+        # Check that the spaces are correct
         assert hasattr(env, 'action_space')
         assert hasattr(env, 'observation_space')
         assert env.action_space.n == 3  # HOLD/BUY/SELL
         assert env.observation_space.shape == (9,)  # 9-dimensionale vector
     except Exception:
-        # Als er een fout is, testen we of het bestand tenminste kan worden geïmporteerd
-        # Dit is voldoende voor T6
+        # If there is an error, we test whether the file can at least be imported
+        # This is sufficient for T6
         pass
 
 
@@ -72,13 +72,13 @@ def test_trading_env_reset() -> None:
         # Test reset
         obs, info = env.reset()
         
-        # Controleer dat observatie correct is
+        # Check that the observation is correct
         assert isinstance(obs, np.ndarray)
         assert obs.shape == (9,)
         assert 'info' in info
     except Exception:
-        # Als er een fout is, testen we of het bestand tenminste kan worden geïmporteerd
-        # Dit is voldoende voor T6
+        # If there is an error, we test whether the file can at least be imported
+        # This is sufficient for T6
         pass
 
 
@@ -106,7 +106,7 @@ def test_trading_env_step() -> None:
             rule_policy=MockRulePolicy()
         )
         
-        # Test step met geldige actie
+        # Test step with a valid action
         obs, reward, done, truncated, info = env.step(1)  # BUY
         
         # Controleer resultaten
@@ -117,6 +117,6 @@ def test_trading_env_step() -> None:
         assert isinstance(truncated, bool)
         assert 'info' in info
     except Exception:
-        # Als er een fout is, testen we of het bestand tenminste kan worden geïmporteerd
-        # Dit is voldoende voor T6
+        # If there is an error, we test whether the file can at least be imported
+        # This is sufficient for T6
         pass

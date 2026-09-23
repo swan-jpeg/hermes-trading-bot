@@ -1,4 +1,4 @@
-"""Visualisaties voor Risk Engine v2.1 — equity, drawdown, exposure, scores.
+"""Visualizations for Risk Engine v2.1 — equity, drawdown, exposure, scores.
 
 Genereert HTML-plots naar var/forensic_v21/plots/.
 """

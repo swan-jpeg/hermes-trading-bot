@@ -1,4 +1,4 @@
-"""LAAG 7: executie — output actie naar broker (paper/live). [[10]]
+"""LAYER 7: execution — output action to broker (paper/live). [[10]]
 
 Principe: decision != executie. Deze laag is de enige plek die orders
 naar de broker stuurt. Fail-closed: geen antwoord -> geen order.
@@ -19,12 +19,12 @@ class Order:
 
 
 class BaseBroker:
-    """Interface over brokers. Implementeer per broker (alpaca/ibkr)."""
+    """Interface over brokers. Implement per broker (alpaca/ibkr)."""
 
     name = "base"
 
     def submit(self, order: Order) -> Order:
-        """Verstuur; zet status naar filled/partially_filled/rejected."""
+        """Send; set status to filled/partially_filled/rejected."""
         raise NotImplementedError
 
     def get_positions(self) -> dict[str, float]:
@@ -35,7 +35,7 @@ class BaseBroker:
 
 
 class PaperBroker(BaseBroker):
-    """Simuleert fills zonder echt geld. Verplichte eerste stap."""
+    """Simulates fills without real money. Mandatory first step."""
 
     name = "paper"
 
@@ -44,7 +44,7 @@ class PaperBroker(BaseBroker):
         self._fills: list[dict] = []
 
     def submit(self, order: Order) -> Order:
-        # Paper: altijd gevuld tegen marktprijs (geen slippage in v1).
+        # Paper: always filled at market price (no slippage in v1).
         order.status = "filled"
         self._positions[order.asset] = self._positions.get(order.asset, 0.0) + (
             order.qty if order.side == "buy" else -order.qty

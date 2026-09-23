@@ -16,7 +16,7 @@ from hermes_bot.schemas import MonteCarloResult
 
 
 class MonteCarloEngineV2:
-    """Blok-bootstrap van rendementen met echte path-simulatie.
+    """Block bootstrap of returns with real path simulation.
 
     Elke pad is een cumulatief product van dagrendementen die per dag uit de
     historische verdeling worden getrokken (met blokken om autocorrelatie te
@@ -33,7 +33,7 @@ class MonteCarloEngineV2:
         horizon: int,
         corr: np.ndarray | None = None,
     ) -> MonteCarloResult:
-        """Simuleer `n_paths` paden over `horizon` dagen.
+        """Simulate `n_paths` paths over `horizon` days.
 
         returns: 1D (enkel asset) of 2D (n_assets x n_days) dagrendementen.
         corr: optionele correlatiematrix voor multi-asset (Cholesky).
@@ -43,15 +43,15 @@ class MonteCarloEngineV2:
             returns = returns.reshape(1, -1)
         n_assets, n_days = returns.shape
 
-        # Multi-asset: decorreleer met Cholesky als correlatie gegeven is.
+        # Multi-asset: decorrelate with Cholesky if correlation is given.
         if corr is not None and n_assets > 1:
             L = np.linalg.cholesky(np.asarray(corr, dtype=float))
             returns = (L @ returns).T  # gecorreleerde rendementen
 
         block = max(1, min(20, n_days // 4))  # blokgrootte behoudt autocorrelatie
 
-        # Simuleer echte paden: per dag een rendement uit de historie.
-        # Pad i, dag d: cumulatief product van getrokken rendementen.
+        # Simulate real paths: one return from history per day.
+        # Path i, day d: cumulative product of drawn returns.
         paths = np.zeros((self.n_paths, n_assets))
         for i in range(self.n_paths):
             cum = np.zeros(n_assets)
@@ -64,20 +64,20 @@ class MonteCarloEngineV2:
                 day += take
             paths[i] = cum
 
-        # Portfolio-rendement = gemiddelde over assets (gelijk gewicht).
+        # Portfolio return = average over assets (equal weight).
         port = paths.mean(axis=1)
         pct = {q: float(np.percentile(port, q)) for q in (5, 10, 25, 50, 75, 90, 95)}
 
-        # VaR95 en Expected Shortfall95 (linkerstaart).
+        # VaR95 and Expected Shortfall95 (left tail).
         var_95 = float(np.percentile(port, 5))
         tail = port[port <= var_95]
         es_95 = float(tail.mean()) if tail.size else var_95
 
-        # ECHTE drawdown-distributie: simuleer per pad een equity-curve door
-        # dagrendementen te trekken en cumulatief te vermenigvuldigen.
+        # REAL drawdown distribution: simulate an equity curve per path by
+        # drawing daily returns and multiplying cumulatively.
         dd = np.zeros(self.n_paths)
         for i in range(self.n_paths):
-            # Trek horizon dagrendementen uit de historische verdeling.
+            # Draw horizon daily returns from the historical distribution.
             idx = self.rng.integers(0, n_days, size=horizon)
             daily = returns[:, idx].mean(axis=0)  # portfolio dag-return per dag
             eq = np.cumprod(1 + daily)
@@ -85,7 +85,7 @@ class MonteCarloEngineV2:
             dd[i] = float(np.min(eq / peak - 1))
         dd_pct = {q: float(np.percentile(dd, q)) for q in (50, 90, 95)}
 
-        # Crash-kans: kans dat drawdown < -20% binnen horizon.
+        # Crash probability: chance that drawdown < -20% within the horizon.
         crash_probability = float(np.mean(dd < -0.20))
 
         return MonteCarloResult(
@@ -99,7 +99,7 @@ class MonteCarloEngineV2:
         )
 
     def stress_scenarios(self, current_portfolio: dict, scenarios: dict) -> dict:
-        """Test huidige portefeuille tegen crash-scenario's."""
+        """Test the current portfolio against crash scenarios."""
         out: dict[str, float] = {}
         for name, asset_returns in scenarios.items():
             total = 0.0

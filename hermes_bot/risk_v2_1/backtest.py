@@ -1,4 +1,4 @@
-"""Backtest-harness voor Risk Engine v2.1 — volledige logging per dag.
+"""Backtest harness for Risk Engine v2.1 — full per-day logging.
 
 Draait de v2.1-engine over een prijsreeks met een neutrale strategie (constant
 long) zodat alle exposure-variatie van de v2.1-engine komt. Logt elke dag de
@@ -23,7 +23,7 @@ OUT = Path(__file__).resolve().parent.parent.parent / "var" / "forensic_v21"
 
 
 class ConstantLongStrategy:
-    """Stelt elke dag 100% long voor (zekerheid 1.0). v2.1-engine beslist."""
+    """Proposes 100% long every day (certainty 1.0). The v2.1 engine decides."""
 
     name = "constant_long"
 
@@ -107,7 +107,7 @@ def run_v21(
     seed: int = 42,
     alpha_signals: dict | None = None,
 ) -> V21Result:
-    """Draai de v2.1-engine over een prijsreeks met volledige logging."""
+    """Run the v2.1 engine over a price series with full logging."""
     engine = RiskEngineV21(risk_config)
     strategy = ConstantLongStrategy()
     mc_engine = MonteCarloEngineV2(seed=seed, n_paths=1000)

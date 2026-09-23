@@ -1,4 +1,4 @@
-"""OOS-visualisaties — equity, drawdown, exposure, regime voor de testperiode.
+"""OOS visualizations — equity, drawdown, exposure, regime for the test period.
 
 Genereert HTML-plots naar var/oos_v1/plots/.
 """
@@ -67,7 +67,7 @@ def generate_plots(sym: str) -> None:
     risk = [e["vol_multiplier"] * e["drawdown_multiplier"] * e["regime_multiplier"]
             for e in log]
 
-    # Regime als numeriek (voor plot).
+    # Regime as numeric (for plotting).
     regime_map = {"normal": 1, "elevated": 0.8, "stressed": 0.5, "crash": 0.2, "recovery": 0.6}
     regime_num = [regime_map.get(r, 1) for r in regime]
 

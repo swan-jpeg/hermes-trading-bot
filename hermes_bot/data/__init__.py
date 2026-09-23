@@ -15,7 +15,7 @@ class CollectorConfig:
 
 
 class BaseCollector:
-    """Interface voor elke data-collector (speech/reports/alerts/market)."""
+    """Interface for every data collector (speech/reports/alerts/market)."""
 
     name = "base"
 
@@ -23,7 +23,7 @@ class BaseCollector:
         self.cfg = cfg or CollectorConfig(name=self.name)
 
     def collect(self) -> list[dict]:
-        """Haal ruwe records op. Must be idempotent + gestructureerd."""
+        """Fetch raw records. Must be idempotent + structured."""
         raise NotImplementedError
 
     def health(self) -> dict[str, object]:

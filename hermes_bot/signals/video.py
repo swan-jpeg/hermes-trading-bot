@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 
 class VideoAnalyzer:
-    """Analyseert video-bestanden naar video-features."""
+    """Analyses video files into video features."""
 
     def __init__(self, use_heavy_models: bool = False) -> None:
         """use_heavy_models: laad zware modellen (DeepFace/MediaPipe)."""
@@ -31,7 +31,7 @@ class VideoAnalyzer:
         self._face_detection = None
 
     def analyze(self, video_path: str) -> dict[str, object]:
-        """Analyseer een video-bestand naar video-features."""
+        """Analyse a video file into video features."""
         if not os.path.exists(video_path):
             return self._create_neutral_output(video_path)
 
@@ -51,14 +51,14 @@ class VideoAnalyzer:
 
     @staticmethod
     def _safe(fn, *args, default=None):
-        """Voer fn uit; bij elke fout de default teruggeven (offline-safe)."""
+        """Run fn; on any error return the default (offline-safe)."""
         try:
             return fn(*args)
         except Exception:
             return default
 
     def _get_facial_expression(self, video_path: str) -> dict[str, float]:
-        """Gezichtsuitdrukking via DeepFace (emotion) op het eerste frame."""
+        """Facial expression via DeepFace (emotion) on the first frame."""
         if not self.use_heavy_models:
             return {}
         import cv2
@@ -147,7 +147,7 @@ class VideoAnalyzer:
         return {"count": float(count), "engaged": 0.0, "neutral": 0.0}
 
     def _create_neutral_output(self, video_path: str) -> dict[str, object]:
-        """Neutrale output als video niet beschikbaar is."""
+        """Neutral output when video is not available."""
         return {
             "facial_expression": {},
             "gesture": {},

@@ -1,4 +1,4 @@
-"""Tests voor webscraping -> signalen -> fusion aansluiting + bottleneck agent.
+"""Tests for webscraping -> signals -> fusion wiring + bottleneck agent.
 
 Deze tests runnen NIET de zware modellen (whisper/DeepFace) noch echt netwerk-
 scraping. Ze verifiëren dat:
@@ -27,7 +27,7 @@ from hermes_bot.fusion import WeightedFusion
 
 
 def test_web_records_to_inputs() -> None:
-    """Webitems -> fusie-inputs met source/sentiment/confidence."""
+    """Web items -> fusion inputs with source/sentiment/confidence."""
     inputs = web_records_to_inputs(
         demo_speech_records(), demo_report_records(), demo_alert_records()
     )
@@ -40,10 +40,10 @@ def test_web_records_to_inputs() -> None:
 
 
 def test_speech_collector_keys() -> None:
-    """SpeechCollector geeft de juiste velden (speaker/headline/body)."""
+    """SpeechCollector returns the right fields (speaker/headline/body)."""
     c = SpeechCollector(CollectorConfig(name="speech", enabled=True), feeds={},
                         max_items=5)
-    # Geen feeds -> lege reeks, geen crash.
+    # No feeds -> empty sequence, no crash.
     assert c.collect() == []
 
 
@@ -60,13 +60,13 @@ def test_alert_collector_keys() -> None:
 
 
 def test_collectors_disabled_returns_empty() -> None:
-    """Uitgeschakelde collectoren geven lege reeks (geen netwerk-call)."""
+    """Disabled collectors return an empty sequence (no network call)."""
     c = SpeechCollector(CollectorConfig(name="speech", enabled=False))
     assert c.collect() == []
 
 
 def test_fusion_accepts_web_sources() -> None:
-    """Fusion model accepteert speech/report/alert/bottleneck als bron."""
+    """Fusion model accepts speech/report/alert/bottleneck as a source."""
     fusion = WeightedFusion()
     inputs = [
         {"source": "speech", "entity_id": "trump", "sentiment": 0.5, "confidence": 0.8},
@@ -85,7 +85,7 @@ def test_fusion_accepts_web_sources() -> None:
 
 
 def test_bottleneck_agent_rates_and_feeds_fusion() -> None:
-    """BottleneckAgent ratet bedrijven en geeft fusion-inputs."""
+    """BottleneckAgent rates companies and returns fusion inputs."""
     agent = BottleneckAgent()
     reports = demo_report_records()
     entity_map = {"NVDA": ["semiconductor"], "AIRTECH": ["actuators"],
@@ -95,14 +95,14 @@ def test_bottleneck_agent_rates_and_feeds_fusion() -> None:
     for i in inputs:
         assert i["source"] == "bottleneck"
         assert i["confidence"] > 0
-    # Door naar fusion.
+    # Pass to fusion.
     fusion = WeightedFusion()
     result = fusion.fuse(inputs)
     assert result.kwaliteit > 0
 
 
 def test_scrape_and_fuse_end_to_end() -> None:
-    """End-to-end scrape_and_fuse() met demo-data (geen netwerk)."""
+    """End-to-end scrape_and_fuse() with demo data (no network)."""
     ws = WebScraper({"enabled": False})
     out = scrape_and_fuse(ws, entity_id="market")
     assert "fusion" in out
@@ -112,7 +112,7 @@ def test_scrape_and_fuse_end_to_end() -> None:
 
 
 def test_bottleneck_analyzer_structure() -> None:
-    """BottleneckAnalyzer vindt knelpunten en geeft to_fusion_input."""
+    """BottleneckAnalyzer finds bottlenecks and returns to_fusion_input."""
     a = BottleneckAnalyzer()
     a.add_node("actuators", demand=0.9, capacity=0.2, players=2)
     a.add_node("semiconductor", demand=0.7, capacity=0.5, players=5)

@@ -29,7 +29,7 @@ from hermes_bot.data import BaseCollector, CollectorConfig
 
 
 def _fetch_rss(url: str, timeout: int = 10) -> list[dict]:
-    """Haal een RSS/Atom-feed op en geef de items als dicts.
+    """Fetch an RSS/Atom feed and return the items as dicts.
 
     Per item: {title, link, summary, published, source}.
     """
@@ -58,7 +58,7 @@ def _fetch_rss(url: str, timeout: int = 10) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# SPEECH COLLECTOR — speeches van CEO's en landsleiders (via nieuws-RSS)
+# SPEECH COLLECTOR — speeches from CEOs and world leaders (via news RSS)
 # ---------------------------------------------------------------------------
 SPEECH_FEEDS = {
     "trump": "https://www.whitehouse.gov/news/feed/",
@@ -73,7 +73,7 @@ CEO_KEYWORDS = ["earnings call", "conference call", "ceo", "executive", "guidanc
 
 
 class SpeechCollector(BaseCollector):
-    """Verzamelt speech-transcripts van landsleiders en CEO's.
+    """Collects speech transcripts from world leaders and CEOs.
 
     Dit levert de RUWE speech-items. De daadwerkelijke audio/video-analyse
     (whisper/DeepFace) gebeurt in de signals-laag zodra een mediabestand
@@ -85,12 +85,12 @@ class SpeechCollector(BaseCollector):
     def __init__(self, cfg: CollectorConfig | None = None, feeds: dict | None = None,
                  max_items: int = 20) -> None:
         super().__init__(cfg)
-        # Explicit lege dict is legitiem (geen feeds); None geeft de default.
+        # An explicit empty dict is legitimate (no feeds); None gives the default.
         self.feeds = SPEECH_FEEDS if feeds is None else feeds
         self.max_items = max_items
 
     def collect(self) -> list[dict]:
-        """Haal recente speech-items op. Offline-safe."""
+        """Fetch recent speech items. Offline-safe."""
         if not self.cfg.enabled:
             return []
         records = []
@@ -113,13 +113,13 @@ class SpeechCollector(BaseCollector):
                         "confidence": 0.6 if (is_political or is_ceo) else 0.3,
                     })
             except Exception as e:
-                # Offline-safe: log en ga door (credibility blijft laag).
+                # Offline-safe: log and continue (credibility stays low).
                 print(f"[speech] feed {speaker} mislukt: {e}")
         return records
 
 
 # ---------------------------------------------------------------------------
-# REPORT COLLECTOR — bedrijfsrapporten en overheidsuitgaven
+# REPORT COLLECTOR — company reports and government spending
 # ---------------------------------------------------------------------------
 REPORT_FEEDS = {
     "sec": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent",
@@ -128,7 +128,7 @@ REPORT_FEEDS = {
 
 
 class ReportCollector(BaseCollector):
-    """Verzamelt bedrijfsrapporten (quarterly) en overheidsuitgaven.
+    """Collects company reports (quarterly) and government spending.
 
     Report-type: business | overheidsuitgaven | onafhankelijk.
     """
@@ -142,7 +142,7 @@ class ReportCollector(BaseCollector):
         self.max_items = max_items
 
     def collect(self) -> list[dict]:
-        """Haal recente rapporten op. Offline-safe."""
+        """Fetch recent reports. Offline-safe."""
         if not self.cfg.enabled:
             return []
         records = []
@@ -165,7 +165,7 @@ class ReportCollector(BaseCollector):
 
 
 # ---------------------------------------------------------------------------
-# ALERT COLLECTOR — nieuwsberichten en point-loops
+# ALERT COLLECTOR — news items and point loops
 # ---------------------------------------------------------------------------
 ALERT_FEEDS = {
     "news": "https://feeds.bbci.co.uk/news/business/rss.xml",
@@ -174,7 +174,7 @@ ALERT_FEEDS = {
 
 
 class AlertCollector(BaseCollector):
-    """Verzamelt nieuws-alerts en point-loops voor regionale scores."""
+    """Collects news alerts and point loops for regional scores."""
 
     name = "alert"
 
@@ -210,7 +210,7 @@ class AlertCollector(BaseCollector):
 # WEB SCRAPER — orchestreert alle collectoren
 # ---------------------------------------------------------------------------
 class WebScraper:
-    """Centrale webscraper die speech/reports/alerts verzamelt."""
+    """Central web scraper that collects speech/reports/alerts."""
 
     def __init__(self, config: dict | None = None) -> None:
         self.cfg = config or {}
@@ -228,13 +228,13 @@ class WebScraper:
 
     @classmethod
     def from_config_file(cls) -> WebScraper:
-        """Bouw een WebScraper uit config.yaml (webscraping sectie)."""
+        """Build a WebScraper from config.yaml (webscraping section)."""
         from hermes_bot.config import load_config
         cfg = load_config()
         return cls(cfg.get("webscraping", {}))
 
     def collect_all(self) -> dict[str, list[dict]]:
-        """Verzamel alle routes in één keer."""
+        """Collect all routes at once."""
         return {
             "speech": self.speech.collect(),
             "reports": self.report.collect(),
@@ -243,7 +243,7 @@ class WebScraper:
 
 
 def demo_speech_records() -> list[dict]:
-    """Offline-demo-items om de keten te testen zonder netwerk."""
+    """Offline demo items to test the chain without a network."""
     return [
         {
             "source": "speech", "speaker": "trump",
@@ -302,7 +302,7 @@ def demo_alert_records() -> list[dict]:
 
 
 def _sentiment_from_text(text: str) -> float:
-    """Eenvoudige lexicon-sentiment (-1..1). Vervangt geen FinBERT; prima voor offline-keten."""
+    """Simple lexicon sentiment (-1..1). Does not replace FinBERT; fine for the offline chain."""
     pos = ["growth", "beat", "expand", "invest", "record", "guidance", "demand", "strong",
            "improve", "opportunity"]
     neg = ["shortage", "delay", "constraint", "worsen", "decline", "risk", "weak",
@@ -317,12 +317,12 @@ def _sentiment_from_text(text: str) -> float:
 
 
 # ---------------------------------------------------------------------------
-# CONVERSIE: ruwe webitems -> signalen voor het fusion model
+# CONVERSION: raw web items -> signals for the fusion model
 # ---------------------------------------------------------------------------
 def web_records_to_inputs(
     speech: list[dict], reports: list[dict], alerts: list[dict], entity_id: str = "market"
 ) -> list[dict]:
-    """Converteer ruwe webitems naar fusie-inputs {source, sentiment, confidence}.
+    """Convert raw web items into fusion inputs {source, sentiment, confidence}.
 
     Dit is de brug: data/ (webscraping) -> signals/ (verwerking) -> fusion/.
     Voor speech wordt de audio/video-analyse (whisper/DeepFace) normaal

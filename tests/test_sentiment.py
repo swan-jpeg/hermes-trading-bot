@@ -1,4 +1,4 @@
-"""Tests voor de NLP-sentiment (T2).
+"""Tests for NLP sentiment (T2).
 
 Deze tests mocken de zware FinBERT-pipeline zodat de suite stabiel draait
 zonder torch/transformers te importeren (die op sommige CPU's een harde
@@ -13,17 +13,17 @@ from hermes_bot.signals.sentiment import SentimentAnalyzer
 
 
 class _FailingModel:
-    """Mock die een fout gooit -> triggert de lexicon-fallback."""
+    """Mock that raises an error -> triggers the lexicon fallback."""
 
     def __call__(self, *args, **kwargs):
         raise RuntimeError("model niet beschikbaar")
 
 
 def test_sentiment_analyzer_basic() -> None:
-    """Test dat de analyzer een lijst van AlertSignals retourneert (lexicon)."""
+    """Test that the analyzer returns a list of AlertSignals (lexicon)."""
     analyzer = SentimentAnalyzer()
-    # Forceer fallback: zet een model dat faalt, zodat transformers nooit
-    # geïmporteerd wordt (SIGILL-veilig).
+    # Force fallback: set a model that fails, so transformers is never
+    # imported (SIGILL-safe).
     analyzer._finbert_model = _FailingModel()
 
     texts = [
@@ -44,7 +44,7 @@ def test_sentiment_analyzer_basic() -> None:
 
 
 def test_sentiment_analyzer_fallback() -> None:
-    """Test dat de analyzer de lexicon-fallback gebruikt."""
+    """Test that the analyzer uses the lexicon fallback."""
     analyzer = SentimentAnalyzer()
     analyzer._finbert_model = _FailingModel()
 
@@ -63,7 +63,7 @@ def test_sentiment_analyzer_fallback() -> None:
 
 
 def test_sentiment_uses_finbert_when_available() -> None:
-    """Test dat FinBERT gebruikt wordt als de pipeline beschikbaar is (gemockt)."""
+    """Test that FinBERT is used when the pipeline is available (mocked)."""
     analyzer = SentimentAnalyzer()
 
     def fake_pipeline(text):

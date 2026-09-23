@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 
 class TradingEnv(gym.Env):
-    """Gymnasium-omgeving voor trading RL.
+    """Gymnasium environment for trading RL.
 
     Volgt de specificaties uit sectie 4 van het plan:
     - Observatie: 9-dimensionale vector
@@ -26,11 +26,11 @@ class TradingEnv(gym.Env):
                  risk_engine, rule_policy: RLFusionModel) -> None:
         super().__init__()
         
-        # Definieer de actie-ruimte: HOLD/BUY/SELL
+        # Define the action space: HOLD/BUY/SELL
         self.action_space = spaces.Discrete(3)  # 0: HOLD, 1: BUY, 2: SELL
         
-        # Definieer de observatie-ruimte: 9-dimensionale vector
-        # Zie sectie 4.1 in PLAN-QWEN.md
+        # Define the observation space: 9-dimensional vector
+        # See section 4.1 in PLAN-QWEN.md
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(9,), dtype=np.float32
         )
@@ -44,28 +44,28 @@ class TradingEnv(gym.Env):
         self.max_steps = 1000  # Beperk het aantal stappen
 
     def reset(self, seed=None, options=None):
-        """Reset de omgeving naar initiele staat."""
+        """Reset the environment to the initial state."""
         super().reset(seed=seed)
         self.current_step = 0
-        # Reset de state naar initieel
+        # Reset the state to initial
         observation = self._get_observation()
         return observation, {}
 
     def step(self, action: int):
-        """Voer een stap uit in de omgeving."""
+        """Take a step in the environment."""
         self.current_step += 1
         
-        # Validatie van de actie
+        # Validate the action
         if action not in [0, 1, 2]:  # HOLD, BUY, SELL
             raise ValueError(f"Invalid action: {action}")
         
-        # Simuleer de impact van de actie (dummy implementatie)
-        # In een echte implementatie zou dit de portfolio state updaten
+        # Simulate the impact of the action (dummy implementation)
+        # In a real implementation this would update the portfolio state
         
         # Bereken reward
         reward = self._compute_reward(action)
         
-        # Bepaal of episode einde is
+        # Determine whether the episode is over
         done = self.current_step >= self.max_steps
         
         # Verkrijg nieuwe observatie
@@ -78,10 +78,10 @@ class TradingEnv(gym.Env):
 
     def _get_observation(self) -> np.ndarray:
         """Genereer observatie vector volgens sectie 4.1."""
-        # Deze implementatie is vereenvoudigd voor T6
-        # In een echte implementatie zouden we de echte waarden gebruiken
+        # This implementation is simplified for T6
+        # In a real implementation we would use the real values
         
-        # De observatie vector heeft 9 dimensies:
+        # The observation vector has 9 dimensions:
         # 0: sentiment (fusie) -1..1
         # 1: zekerheid (fusie) 0..1
         # 2: kwaliteit (fusie) 0..1
@@ -107,6 +107,6 @@ class TradingEnv(gym.Env):
 
     def _compute_reward(self, action: int) -> float:
         """Bereken reward volgens sectie 4.3."""
-        # Voor nu een dummy implementatie
-        # In een echte implementatie zouden we compute_reward gebruiken
+        # For now a dummy implementation
+        # In a real implementation we would use compute_reward
         return 0.0

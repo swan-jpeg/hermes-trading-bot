@@ -13,17 +13,17 @@ from hermes_bot.schemas import FusionSignal
 
 
 class BaseFusion:
-    """Interface voor fusie-aanpakken."""
+    """Interface for fusion approaches."""
 
     def fuse(self, inputs: list[dict]) -> FusionSignal:
         raise NotImplementedError
 
 
 class WeightedFusion(BaseFusion):
-    """Gewogen aggregatie met bronweging + onzekerheid als variance."""
+    """Weighted aggregation with source weighting + uncertainty as variance."""
 
     def __init__(self, source_weights: dict[str, float] | None = None) -> None:
-        # Weging per bron. Web/bottleneck zijn nu expliciete bronnen.
+        # Weighting per source. Web/bottleneck are now explicit sources.
         self.weights = source_weights or {
             "audiovisual": 0.15,
             "speech": 0.15,      # speeches van CEO's/landsleiders (webscraping)
@@ -36,7 +36,7 @@ class WeightedFusion(BaseFusion):
         }
 
     def fuse(self, inputs: list[dict]) -> FusionSignal:
-        """inputs: lijst van {source, sentiment, confidence, entity_id}.
+        """inputs: list of {source, sentiment, confidence, entity_id}.
 
         sentiment: -1..1 richting. confidence: 0..1.
         Kwaliteit = gewogen gemiddelde confidence.
@@ -52,7 +52,7 @@ class WeightedFusion(BaseFusion):
         if total_w <= 0:
             total_w = 1.0
 
-        # Gewogen sentiment (emotie) en kwaliteit.
+        # Weighted sentiment (emotion) and quality.
         sentiment = 0.0
         kvaliteit = 0.0
         for i in inputs:
@@ -62,7 +62,7 @@ class WeightedFusion(BaseFusion):
         sentiment /= total_w
         kvaliteit /= total_w
 
-        # Zekerheid = 1 - variantie van bron-sentimenten (genormaliseerd).
+        # Certainty = 1 - variance of source sentiments (normalized).
         sentiments = [i.get("sentiment", 0.0) for i in inputs]
         var = float(np.var(sentiments)) if len(sentiments) > 1 else 0.0
         zekerheid = float(np.clip(1.0 - var, 0.0, 1.0))
@@ -91,5 +91,5 @@ class WeightedFusion(BaseFusion):
 
 
 def build_fusion(config: dict) -> BaseFusion:
-    """Fabriek: kies fusie-aanpak uit config."""
+    """Factory: choose the fusion approach from config."""
     return WeightedFusion()

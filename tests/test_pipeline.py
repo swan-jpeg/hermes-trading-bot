@@ -1,4 +1,4 @@
-"""Tests voor de geïntegreerde architectuur-pipeline.
+"""Tests for the integrated architecture pipeline.
 
 Verifieert dat de "uitbreidingen" (bottleneck, regime, regionale scores) echt
 IN de keten zitten als fusion-inputs, niet als losse modules.
@@ -26,7 +26,7 @@ def test_pipeline_returns_full_result() -> None:
 
 
 def test_bottleneck_is_fusion_input() -> None:
-    """Bottleneck-ratings zitten in de web_inputs (geïntegreerd)."""
+    """Bottleneck ratings are in the web_inputs (integrated)."""
     result = run_pipeline()
     sources = {i["source"] for i in result["web_inputs"]}
     assert "bottleneck" in sources
@@ -67,7 +67,7 @@ def test_regional_scores_input() -> None:
 
 
 def test_pipeline_runs_multiple_times() -> None:
-    """Pipeline is herbruikbaar (geen state-leak tussen runs)."""
+    """Pipeline is reusable (no state leak between runs)."""
     p = Pipeline()
     r1 = p.run(price=100.0)
     r2 = p.run(price=110.0)

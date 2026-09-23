@@ -56,7 +56,7 @@ class FundamentalAgent:
         }
 
     def _score_news(self, news: list[dict]) -> float:
-        """Gewogen sentiment over berichten (credibility-gewogen)."""
+        """Weighted sentiment over messages (credibility-weighted)."""
         if not news:
             return 0.0
         total = sum(n.get("credibility", 0.5) for n in news)

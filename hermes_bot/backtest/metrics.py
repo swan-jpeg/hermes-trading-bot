@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 
 class BacktestResult(BaseModel):
-    """Resultaat van een backtest."""
+    """Result of a backtest."""
 
     initial_capital: float
     final_capital: float

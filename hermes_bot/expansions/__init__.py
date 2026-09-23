@@ -56,7 +56,7 @@ class BottleneckAnalyzer:
         return sorted(scored, key=lambda x: -x[1])[:k]
 
     def to_fusion_input(self, sentiment: float = 0.0) -> dict:
-        """Converteer de top-bottleneck naar een fusie-input.
+        """Convert the top bottleneck into a fusion input.
 
         Dit is de brug: bottleneck-analyse -> fusion model. De bottleneck-score
         wordt vertaald naar een 'sentiment'-achtige richting: hoge bottleneck =
@@ -77,7 +77,7 @@ class BottleneckAnalyzer:
         }
 
     def ingest(self, reports: list[ReportSignal]) -> dict[str, float]:
-        """Verwerk rapporten om vraagsignalen te halen voor bottleneck analyse.
+        """Process reports to extract demand signals for bottleneck analysis.
 
         Args:
             reports: Lijst van ReportSignal objecten
@@ -85,20 +85,20 @@ class BottleneckAnalyzer:
         Returns:
             Dict met bottleneck scores voor elk knooppunt (product/sector)
         """
-        # Voor nu een simpele implementatie
-        # In een echte implementatie zouden we:
-        # 1. Tekstanalyse van rapporten
-        # 2. Extractie van vraagsignalen
-        # 3. Mapping naar supply-chain knooppunten
+        # For now a simple implementation
+        # In a real implementation we would:
+        # 1. Text analysis of reports
+        # 2. Extraction of demand signals
+        # 3. Mapping to supply-chain nodes
         
         # Dummy implementatie
         scores = {}
         for report in reports:
-            # Simuleer dat we uit rapporten vraagsignalen halen
-            # Voor nu een simpele mapping op basis van keywords
+            # Simulate extracting demand signals from reports
+            # For now a simple mapping based on keywords
             text = report.body.lower()
             if "supply" in text or "production" in text:
-                # Simuleer dat we een product vinden
+                # Simulate finding a product
                 scores["manufacturing"] = 0.7
             if "capacity" in text or "shortage" in text:
                 scores["supply_chain"] = 0.8
@@ -109,7 +109,7 @@ class BottleneckAnalyzer:
 
 
 class BottleneckAgent:
-    """Ratet bedrijven op basis van hun positie in de bottleneck-keten.
+    """Rates companies based on their position in the bottleneck chain.
 
     Dit is de 'agent' die het bottleneck concept uitwerkt: uit webrapporten
     worden vraagsignalen gehaald, gekoppeld aan supply-chain knooppunten, en
@@ -129,7 +129,7 @@ class BottleneckAgent:
         self.entity_exposure[entity] = nodes
 
     def rate_entities(self, market_sentiment: float = 0.0) -> dict[str, float]:
-        """Rating per bedrijf = gemiddelde bottleneck-score van zijn knooppunten.
+        """Rating per company = average bottleneck score of its nodes.
 
         Hoge rating = levert op een knelpunt (vraagdruk > capaciteit) ->
         verhoogde omzet-potentie, maar ook leveringsrisico. De rating is
@@ -147,7 +147,7 @@ class BottleneckAgent:
         return ratings
 
     def to_fusion_inputs(self, market_sentiment: float = 0.0) -> list[dict]:
-        """Converteer per-bedrijf ratings naar fusie-inputs.
+        """Convert per-company ratings into fusion inputs.
 
         Elke input is {source: 'bottleneck', entity_id, sentiment, confidence,
         bottleneck_score}. Dit voedt het fusion model per bedrijf.
@@ -178,13 +178,13 @@ class BottleneckAgent:
         reports: ruwe webitems {headline, body}.
         entity_map: {bedrijf: [bottleneck-nodes]}.
         """
-        # 1. Bouw de supply-chain graaf uit rapporten (vraagsignalen).
+        # 1. Build the supply-chain graph from reports (demand signals).
         for r in reports:
             text = f"{r.get('headline', '')} {r.get('body', '')}".lower()
             for node in ["semiconductor", "actuators", "power", "logistics"]:
                 if node in text:
                     self.analyzer.add_node(node, demand=0.8, capacity=0.4, players=3)
-        # 2. Koppel bedrijven aan knooppunten.
+        # 2. Link companies to nodes.
         for entity, nodes in entity_map.items():
             self.set_exposure(entity, nodes)
         # 3. Ratings -> fusie-inputs.
@@ -216,7 +216,7 @@ class RegimeDetector:
 
 
 class RegionalScorer:
-    """Analyseert regionale scores uit nieuws/alerts."""
+    """Analyses regional scores from news/alerts."""
 
     def __init__(self) -> None:
         # Regionale scores: veiligheid, tevredenheid, sociale zekerheid, bedrijfseconomisch
@@ -228,7 +228,7 @@ class RegionalScorer:
         }
 
     def score_from_reports(self, reports: list[ReportSignal]) -> dict[str, float]:
-        """Bereken regionale scores uit rapporten.
+        """Compute regional scores from reports.
 
         Args:
             reports: Lijst van ReportSignal objecten
@@ -236,11 +236,11 @@ class RegionalScorer:
         Returns:
             Dict met regionale scores
         """
-        # Voor nu een simpele implementatie
-        # In een echte implementatie zouden we:
-        # 1. Tekstanalyse van rapporten
-        # 2. Extractie van regionale informatie
-        # 3. Scoring op basis van inhoud
+        # For now a simple implementation
+        # In a real implementation we would:
+        # 1. Text analysis of reports
+        # 2. Extraction of regional information
+        # 3. Scoring based on content
         
         # Dummy implementatie
         total_scores = {
@@ -263,7 +263,7 @@ class RegionalScorer:
             if "economy" in text or "growth" in text or "inflation" in text:
                 total_scores["bedrijfseconomische_veranderingen"] += 0.2
                 
-        # Normaliseer naar 0-1
+        # Normalize to 0-1
         normalized_scores = {}
         for key, value in total_scores.items():
             normalized_scores[key] = min(value, 1.0)

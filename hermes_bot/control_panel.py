@@ -1,16 +1,16 @@
-"""Backtest Control Panel — configuratie/experiment/visualisatie-laag.
+"""Backtest Control Panel — config/experiment/visualization layer.
 
-Dit is GEEN nieuwe backtest-engine. Het is een dunne laag BOVENOP de
-bestaande backtester (risk_v2_1.backtest.run_v21) waarmee de gebruiker zonder
-code te wijzigen:
+This is NOT a new backtest engine. It is a thin layer ON TOP of the
+existing backtester (risk_v2_1.backtest.run_v21) that lets the user, without
+changing code:
 
-- assets en periode kiest
-- vol-target / risk-componenten / kosten instelt
-- één backtest of 2-5 configuraties draait
-- equity / drawdown / exposure / risk-opportunity grafieken ziet
-- resultaten opslaat in var/backtests/<run_id>/ en reproduceert
+- choose assets and period
+- set vol-target / risk components / costs
+- run one backtest or 2-5 configurations
+- see equity / drawdown / exposure / risk-opportunity charts
+- save results to var/backtests/<run_id>/ and reproduce them
 
-De v2.1-engine en de strategie worden NIET gewijzigd.
+The v2.1 engine and the strategy are NOT modified.
 """
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ DEFAULT_RISK = {
 
 @dataclass
 class BacktestConfig:
-    """Alle instellingen voor één backtest-run (interface/experimentlaag)."""
+    """All settings for one backtest run (interface/experiment layer)."""
 
     # Markt / periode.
     asset: str = "SPY"
@@ -72,7 +72,7 @@ class BacktestConfig:
     label: str = ""           # voor compare-weergave
 
     def risk_config(self) -> dict:
-        """Bouw de v2.1 risk-config uit deze instellingen (+ toggles)."""
+        """Build the v2.1 risk config from these settings (+ toggles)."""
         risk = dict(DEFAULT_RISK)
         risk["vol_target"] = self.vol_target
         if not self.opportunity:
@@ -82,7 +82,7 @@ class BacktestConfig:
         if not self.emergency_brake:
             risk["_emergency_off"] = True
         if not self.risk_engine:
-            # Zet alle risk-mechanismen uit -> exposure is gewoon intended.
+            # Disable all risk mechanisms -> exposure is just the intended one.
             risk.update({
                 "_opp_off": True, "_recovery_off": True,
                 "_emergency_off": True, "_strategic_off": True, "_tactical_off": True,
@@ -91,7 +91,7 @@ class BacktestConfig:
 
 
 def fetch_prices(cfg: BacktestConfig) -> pd.DataFrame:
-    """Haal prijzen op voor de periode (echte data via yfinance)."""
+    """Fetch prices for the period (real data via yfinance)."""
     period = f"{max(1, int(cfg.years))}y"
     prices = load_prices(cfg.asset, period=period)
     if cfg.start:
@@ -100,7 +100,7 @@ def fetch_prices(cfg: BacktestConfig) -> pd.DataFrame:
         prices = prices[prices.index <= pd.Timestamp(cfg.end)]
     if prices.empty:
         raise ValueError(f"geen data voor {cfg.asset} in gekozen periode")
-    # Drop onvolledige/NaN rijen (bv. de actuele handelsdag die niet is afgesloten).
+    # Drop incomplete/NaN rows (e.g. the current trading day that has not closed).
     prices = prices.dropna()
     if prices.empty:
         raise ValueError(f"geen geldige data voor {cfg.asset} in gekozen periode")
@@ -108,13 +108,13 @@ def fetch_prices(cfg: BacktestConfig) -> pd.DataFrame:
 
 
 def _extra_metrics(equity: list[float], returns: list[float], prices: pd.Series) -> dict:
-    """Best/worst dag en maand (lees-only, geen nieuwe berekeningen)."""
+    """Best/worst day and month (read-only, no new calculations)."""
     rets = np.asarray(returns, dtype=float)
     out = {}
     if rets.size:
         out["best_day"] = round(float(rets.max()), 4)
         out["worst_day"] = round(float(rets.min()), 4)
-    # Maand-rendementen (cumulatief per maand uit equity).
+    # Monthly returns (cumulative per month from equity).
     eq = np.asarray(equity, dtype=float)
     if eq.size > 20:
         monthly = np.diff(eq[::21]) / eq[::21][:-1]
@@ -125,7 +125,7 @@ def _extra_metrics(equity: list[float], returns: list[float], prices: pd.Series)
 
 
 def run_backtest(cfg: BacktestConfig, return_log: bool = False) -> dict:
-    """Voer één backtest uit met de bestaande v2.1-engine.
+    """Run one backtest with the existing v2.1 engine.
 
     Retourneert een dict met metrics, equity/timestamps/exposure (voor plots),
     en optioneel de dagelijkse log (voor risk/opportunity-grafiek).
@@ -134,13 +134,13 @@ def run_backtest(cfg: BacktestConfig, return_log: bool = False) -> dict:
 
     prices = fetch_prices(cfg)
     costs_on = cfg.transaction_costs
-    # run_v21 rekent 10bps. Zet kosten uit door de engine met 0 kosten te runnen.
+    # run_v21 charges 10bps. Disable costs by running the engine with 0 costs.
     if not costs_on:
-        # Gebruik een aparte runner? run_v21 heeft vaste 10bps.
+        # Use a separate runner? run_v21 has fixed 10bps.
         pass
     result = run_v21(prices, cfg.risk_config(), name=cfg.label or cfg.asset)
 
-    # Benchmark (buy & hold) over zelfde periode.
+    # Benchmark (buy & hold) over the same period.
     closes = prices["close"].values
     bh_total = closes[-1] / closes[0] - 1
 
@@ -165,13 +165,13 @@ def run_backtest(cfg: BacktestConfig, return_log: bool = False) -> dict:
 
 
 def make_run_id(cfg: BacktestConfig) -> str:
-    """Run-ID uit config + tijd (reproduceerbaar, uniek)."""
+    """Run ID from config + time (reproducible, unique)."""
     h = hashlib.md5(json.dumps(asdict(cfg), sort_keys=True).encode()).hexdigest()[:8]
     return f"{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}_{h}"
 
 
 def run_compare(configs: list[BacktestConfig]) -> dict:
-    """Vergelijk 2-5 configuraties op exact dezelfde data."""
+    """Compare 2-5 configurations on exactly the same data."""
     assert 2 <= len(configs) <= 5, "vergelijk 2 tot 5 configuraties"
     results = [run_backtest(c) for c in configs]
     return {
@@ -184,7 +184,7 @@ def run_compare(configs: list[BacktestConfig]) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# VISUALISATIES (self-contained SVG, geen nieuw framework)
+# VISUALIZATIONS (self-contained SVG, no new framework)
 # ---------------------------------------------------------------------------
 def _svg_line(series, color, w=900, h=280, minv=None, maxv=None):
     if not series:
@@ -270,7 +270,7 @@ def risk_opportunity_chart(data: dict) -> str:
 
 
 def comparison_chart(compare_data: dict, metric: str = "equity") -> str:
-    """Equity/drawdown van alle gecompareerde configuraties op één grafiek."""
+    """Equity/drawdown of all compared configurations on one chart."""
     colors = ["#0a84ff", "#ff9f0a", "#30d158", "#bf5af2", "#ff375f"]
     series = []
     lo, hi = 1e18, -1e18
@@ -291,7 +291,7 @@ def comparison_chart(compare_data: dict, metric: str = "equity") -> str:
 
 
 def parameter_relationship_chart(compare_data: dict, param: str) -> str:
-    """Parameter -> CAGR / Max DD scatter (automatisch bij compare)."""
+    """Parameter -> CAGR / Max DD scatter (automatic on compare)."""
     rows = [(r["config"].get(param, 0), r["metrics"]["cagr"], r["metrics"]["max_drawdown"])
             for r in compare_data["results"]]
     xs = [r[0] for r in rows]
@@ -343,7 +343,7 @@ def quick_experiments() -> dict[str, list[BacktestConfig]]:
 # OPSLAG + REPRODUCTIE
 # ---------------------------------------------------------------------------
 def save_run(data: dict) -> Path:
-    """Sla een run op in var/backtests/<run_id>/."""
+    """Save a run to var/backtests/<run_id>/."""
     run_id = data["run_id"]
     d = VAR / run_id
     d.mkdir(parents=True, exist_ok=True)
@@ -353,7 +353,7 @@ def save_run(data: dict) -> Path:
             "run_type", "timestamps"]
     slim = {k: v for k, v in data.items() if k in keep}
     (d / "results.json").write_text(json.dumps(slim, indent=2, default=str))
-    # Commit voor reproductie.
+    # Commit for reproducibility.
     try:
         r = subprocess.run(["git", "-C", str(Path(__file__).parent.parent), "rev-parse", "HEAD"],
                            capture_output=True, text=True, timeout=5)
@@ -413,7 +413,7 @@ def overview_html(data: dict) -> str:
 
 
 def run_to_html(data: dict) -> str:
-    """Volledige HTML-uitvoer voor één backtest-run."""
+    """Full HTML output for one backtest run."""
     parts = [overview_html(data)]
     parts.append("<div class='card'><h3>Equity-curve</h3>"
                  + equity_chart(data, data.get("prices")) + "</div>")
@@ -426,7 +426,7 @@ def run_to_html(data: dict) -> str:
 
 
 def compare_to_html(data: dict) -> str:
-    """Volledige HTML-uitvoer voor een compare-run."""
+    """Full HTML output for a compare run."""
     if data["run_type"] != "compare":
         return run_to_html(data)
     # Tabel: Config | Return | CAGR | MaxDD | Sharpe | AvgExp | Trades

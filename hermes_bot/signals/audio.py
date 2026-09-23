@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 
 class AudioAnalyzer:
-    """Analyseert audio-bestanden naar transcript, emotie en prosodie."""
+    """Analyses audio files into transcript, emotion and prosody."""
 
     def __init__(self, use_heavy_models: bool = False) -> None:
         """use_heavy_models: laad zware modellen (whisper/emotie). Standaard
@@ -36,7 +36,7 @@ class AudioAnalyzer:
         self._opensmile = None
 
     def analyze(self, audio_path: str) -> SpeechSignal:
-        """Analyseer een audio-bestand naar een SpeechSignal."""
+        """Analyse an audio file into a SpeechSignal."""
         if not os.path.exists(audio_path):
             return self._create_neutral_signal(audio_path)
 
@@ -71,7 +71,7 @@ class AudioAnalyzer:
 
     @staticmethod
     def _safe(fn, *args, default=None, timeout: float = 30.0):
-        """Voer fn uit in een thread met timeout; bij fout/timeout de default.
+        """Run fn in a thread with a timeout; on error/timeout return the default.
 
         Voorkomt dat een hangend zwaar model (bijv. emotion-pipeline op een
         trage CPU) de hele analyse blokkeert.
@@ -96,7 +96,7 @@ class AudioAnalyzer:
         return result["value"]
 
     def _get_transcript(self, audio_path: str) -> str:
-        """Transcriptie via faster-whisper (alleen als use_heavy_models)."""
+        """Transcription via faster-whisper (only if use_heavy_models)."""
         if not self.use_heavy_models:
             return ""
         from faster_whisper import WhisperModel
@@ -107,7 +107,7 @@ class AudioAnalyzer:
         return " ".join(seg.text for seg in segments).strip()
 
     def _get_emotion(self, audio_path: str) -> dict[str, float]:
-        """Emotie-schatting uit prosodie (pitch/volume/pace).
+        """Emotion estimate from prosody (pitch/volume/pace).
 
         Gebruikt een lichte, betrouwbare benadering die op elke machine werkt
         (geen zwaar model nodig). Als use_heavy_models aanstaat en een
@@ -135,7 +135,7 @@ class AudioAnalyzer:
         import librosa
 
         y, sr = librosa.load(audio_path, sr=16000, mono=True)
-        # Pitch-variatie (F0 std) en volume (RMS).
+        # Pitch variation (F0 std) and volume (RMS).
         f0, _, _ = librosa.pyin(y, fmin=80, fmax=400, sr=sr)
         f0_clean = f0[~np.isnan(f0)] if f0 is not None else None
         pitch_var = float(f0_clean.std()) if f0_clean is not None and len(f0_clean) else 0.0
@@ -152,19 +152,19 @@ class AudioAnalyzer:
         }
 
     def _get_pauses(self, audio_path: str) -> float:
-        """Aantal pauzes (stiltes) in de audio."""
+        """Number of pauses (silences) in the audio."""
         import librosa
 
         y, sr = librosa.load(audio_path, sr=16000, mono=True)
         hop = 512
         rms = librosa.feature.rms(y=y, hop_length=hop)[0]
         silent = (rms < rms.mean() * 0.1).astype(int)
-        # Tel overgangen naar stilte (pauzes).
+        # Count transitions to silence (pauses).
         transitions = sum(1 for i in range(1, len(silent)) if silent[i] == 1 and silent[i - 1] == 0)
         return float(transitions)
 
     def _create_neutral_signal(self, audio_path: str) -> SpeechSignal:
-        """Neutrale SpeechSignal als audio niet beschikbaar is."""
+        """Neutral SpeechSignal when audio is not available."""
         from hermes_bot.signals.audiovisual import SpeechSignal
 
         return SpeechSignal(

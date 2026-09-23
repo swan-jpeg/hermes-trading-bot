@@ -7,7 +7,7 @@ from hermes_bot.data import BaseCollector, CollectorConfig
 
 
 class MarketDataCollector(BaseCollector):
-    """Haalt OHLCV + fundamentals op voor de universe (yfinance start)."""
+    """Fetches OHLCV + fundamentals for the universe (yfinance to start)."""
 
     name = "market"
 
@@ -20,7 +20,7 @@ class MarketDataCollector(BaseCollector):
         self.symbols = symbols or ["AAPL", "MSFT", "SPY"]
 
     def collect(self) -> list[dict]:
-        """Haal dagelijkse OHLCV op via yfinance.
+        """Fetch daily OHLCV via yfinance.
 
         Records: {symbol, timestamp, open, high, low, close, volume}.
         """

@@ -1,4 +1,4 @@
-"""Gedeelde schemas (pydantic) voor alle modulen — de 'taal' tussen de lagen."""
+"""Shared schemas (pydantic) for all modules — the 'language' between layers."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -16,7 +16,7 @@ class Action(StrEnum):
 
 
 class ExitReason(StrEnum):
-    """Waarom een positie gesloten/verkleind wordt — maakt winst nemen expliciet."""
+    """Why a position is closed/reduced — makes taking profit explicit."""
 
     TAKE_PROFIT = "take_profit"
     STOP_LOSS = "stop_loss"
@@ -45,7 +45,7 @@ class SourceKind(StrEnum):
 
 
 class BaseSignal(BaseModel):
-    """Elke signaalbron levert dit minimum."""
+    """Every signal source provides this minimum."""
 
     source: SourceKind
     source_name: str
@@ -64,7 +64,7 @@ class AlertSignal(BaseSignal):
 
 
 class FusionSignal(BaseModel):
-    """Uitgang van het fusiemodel ([[06]]). Kwaliteit/zekerheid/emotie."""
+    """Output of the fusion model ([[06]]). Quality/certainty/emotion."""
 
     entity_id: str
     tijdstip: datetime
@@ -75,7 +75,7 @@ class FusionSignal(BaseModel):
 
 
 class EntityAnalysis(BaseModel):
-    """Uitgang van de fundamentele AI-agent ([[05]])."""
+    """Output of the fundamental AI agent ([[05]])."""
 
     entity_id: str
     time: datetime
@@ -88,7 +88,7 @@ class EntityAnalysis(BaseModel):
 
 
 class Position(BaseModel):
-    """Een open positie. Geeft de beslissingslaag prijs-bewustzijn zodat
+    """An open position. Gives the decision layer price awareness so that
     winst genomen en verlies beperkt kan worden ([[07]]/[[09]])."""
 
     entity: str
@@ -100,19 +100,19 @@ class Position(BaseModel):
     trailing_stop_pct: float = Field(default=0.05, ge=0.0)  # -5% vanaf hoogtepunt
 
     def unrealized_pnl_pct(self, current_price: float) -> float:
-        """On-gerealiseerde winst/verlies in % t.o.v. entry."""
+        """Unrealized profit/loss in % vs entry."""
         if current_price <= 0:
             return 0.0
         return (current_price - self.entry_price) / self.entry_price
 
     def exit_reason_at(self, current_price: float, peak_price: float) -> ExitReason:
-        """Bepaal of de positie gesloten moet worden o.b.v. prijsregels."""
+        """Determine whether the position should be closed based on price rules."""
         pnl = self.unrealized_pnl_pct(current_price)
         if pnl >= self.take_profit_pct:
             return ExitReason.TAKE_PROFIT
         if pnl <= -self.stop_loss_pct:
             return ExitReason.STOP_LOSS
-        # Trailing stop: vanaf het hoogtepunt sinds entry.
+        # Trailing stop: from the high since entry.
         if peak_price > self.entry_price:
             drawdown_from_peak = (peak_price - current_price) / peak_price
             if drawdown_from_peak >= self.trailing_stop_pct:
@@ -121,7 +121,7 @@ class Position(BaseModel):
 
 
 class RLRawDecision(BaseModel):
-    """Voorstel van de RL-laag. WORDT NOOIT DIRECT UITGEVOERD."""
+    """Proposal from the RL layer. NEVER EXECUTED DIRECTLY."""
 
     entity: str
     action: Action
@@ -133,7 +133,7 @@ class RLRawDecision(BaseModel):
 
 
 class RiskApproval(BaseModel):
-    """Uitgang van de risico-engine ([[09]]). De enige weg naar executie."""
+    """Output of the risk engine ([[09]]). The only path to execution."""
 
     approved: bool
     target_alloc: dict[str, float]  # asset -> gewicht
@@ -146,7 +146,7 @@ class RiskApproval(BaseModel):
 
 
 class MonteCarloResult(BaseModel):
-    """Uitgang van de Monte Carlo-simulatie ([[08]])."""
+    """Output of the Monte Carlo simulation ([[08]])."""
 
     n_paths: int
     horizon: int  # dagen

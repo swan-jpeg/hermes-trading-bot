@@ -1,4 +1,4 @@
-"""CLI-entry voor de bot."""
+"""CLI entry point for the bot."""
 from __future__ import annotations
 
 from typing import Any
@@ -21,7 +21,7 @@ class HermesBotCLI:
         return self.config.get("universe", {}).get("stocks", [])
 
     def web_status(self) -> dict:
-        """Toon welke webscraping-routes aanstaan (uit config.yaml)."""
+        """Show which webscraping routes are enabled (from config.yaml)."""
         ws = self.config.get("webscraping", {})
         routes = ws.get("routes", {})
         return {
@@ -36,7 +36,7 @@ class HermesBotCLI:
         }
 
     def web_scrape(self, use_demo: bool = False) -> dict:
-        """Draai de webscraping->fusion keten (offline demo of echte feeds)."""
+        """Run the webscraping->fusion chain (offline demo or real feeds)."""
         from hermes_bot.data.scraper import WebScraper, scrape_and_fuse
         ws = WebScraper.from_config_file()
         if use_demo or not ws.cfg.get("enabled", False):

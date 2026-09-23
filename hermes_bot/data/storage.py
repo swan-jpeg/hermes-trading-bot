@@ -1,4 +1,4 @@
-"""SQLite-opslag voor dev (geen externe DB nodig om te starten)."""
+"""SQLite storage for dev (no external DB needed to start)."""
 from __future__ import annotations
 
 import sqlite3
@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 class SQLiteStore:
-    """Minimale opslag: tabel `market_data` voor OHLCV-records."""
+    """Minimal storage: `market_data` table for OHLCV records."""
 
     def __init__(self, path: str | Path = "var/tradingbot.db") -> None:
         self.path = Path(path)

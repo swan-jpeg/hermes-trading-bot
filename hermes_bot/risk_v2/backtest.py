@@ -1,4 +1,4 @@
-"""Backtest-harness voor Risk Engine v2 — volledige logging per dag.
+"""Backtest harness for Risk Engine v2 — full per-day logging.
 
 Draait de v2-engine over een prijsreeks met een neutrale strategie (constant
 long) zodat alle exposure-variatie van de v2-engine komt. Logt elke dag de
@@ -23,7 +23,7 @@ OUT = Path(__file__).resolve().parent.parent.parent / "var" / "forensic_v2"
 
 
 class ConstantLongStrategy:
-    """Stelt elke dag 100% long voor (zekerheid 1.0). v2-engine beslist."""
+    """Proposes 100% long every day (certainty 1.0). The v2 engine decides."""
 
     name = "constant_long"
 
@@ -106,7 +106,7 @@ def run_v2(
     mc_every: int = 20,
     seed: int = 42,
 ) -> V2Result:
-    """Draai de v2-engine over een prijsreeks met volledige logging."""
+    """Run the v2 engine over a price series with full logging."""
     engine = RiskEngineV2(risk_config)
     strategy = ConstantLongStrategy()
     mc_engine = MonteCarloEngineV2(seed=seed, n_paths=1000)
@@ -143,7 +143,7 @@ def run_v2(
             except Exception:
                 mc = None
 
-        # Huidige equity vóór de trade (voor drawdown).
+        # Current equity before the trade (for drawdown).
         current_equity = cash + qty * price
         final_exp, breakdown = engine.approve(decision, portfolio, current_equity, mc)
 
@@ -204,7 +204,7 @@ def run_v2(
 
 
 def save_v2(result: V2Result, subdir: str = "") -> None:
-    """Sla resultaat op als JSON (machine-readable)."""
+    """Save the result as JSON (machine-readable)."""
     d = OUT / subdir
     d.mkdir(parents=True, exist_ok=True)
     (d / f"{result.name}_metrics.json").write_text(json.dumps(result.metrics, indent=2))

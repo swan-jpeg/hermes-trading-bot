@@ -560,7 +560,7 @@ def _architecture_html() -> str:
     n_speech = _node("speech", 90, 195, 170, 54, "Speech", ["CEO's · landsleiders"], "")
     n_reports = _node("reports", 290, 195, 190, 54, "Reports & Alerts", ["quarterly · overheidsuitgaven"], "")
     n_alerts = _node("alerts", 520, 195, 170, 54, "Nieuws & Point-loops", ["alerts"], "")
-    # Uitbreidingen (nu geintegreerd in laag 2)
+    # Extensions (now integrated in layer 2)
     n_bottleneck = _node("bottleneck", 720, 195, 190, 54, "B2B Bottleneck", ["supply-chain · knelpunten"], "")
     n_regional = _node("regional", 90, 270, 170, 50, "Regionale Scores", ["veiligheid · economie"], "")
     n_regime = _node("regime", 520, 270, 170, 50, "Regime / Orderflow", ["bull · crash · COT"], "")
@@ -574,16 +574,16 @@ def _architecture_html() -> str:
     n_action = _node("action", 240, 715, 200, 50, "Output Actie", ["aandelen · ETF's · obligaties · cash"], "action", "gCore")
     n_exec = _node("exec", 560, 715, 200, 50, "Executie", ["paper · live · fail-closed"], "action", "gCore")
 
-    # Centra (onder/ boven van nodes) voor edge-verbindingen.
+    # Centers (bottom/top of nodes) for edge connections.
     def edge_bottom_center(x, y, w, h): return (x + w/2, y + h)
     def edge_top_center(x, y, w, h): return (x + w/2, y)
 
     e = {}
-    # server(onderkant) -> scrape(onderkant? nee: rechts naar links)
-    # Gebruik zijkant-verbindingen om het netjes te laten lopen:
+    # server(bottom) -> scrape(bottom? no: right to left)
+    # Use side connections to keep it tidy:
     # server rechts -> scrape links
     e["e_server_scrape"] = _edge(350, 68, 480, 68, cx=0.5, cy=0.5)  # horizontaal
-    # scrape onder -> elke signaal-top
+    # scrape bottom -> each signal top
     e["e_scrape_speech"] = _edge(560, 91, 175, 195, 0.5, 0.5)
     e["e_scrape_reports"] = _edge(610, 91, 385, 195, 0.5, 0.45)
     e["e_scrape_alerts"] = _edge(655, 91, 605, 195, 0.5, 0.5)
@@ -603,7 +603,7 @@ def _architecture_html() -> str:
     e["e_risk_action"] = _edge(750, 586, 340, 715, 0.5, 0.4)
     e["e_action_exec"] = _edge(440, 765, 560, 765, 0.5, 0.5)
 
-    # Bouw de SVG door alleen de echte placeholders te vervangen (niet .format,
+    # Build the SVG by replacing only the real placeholders (not .format,
     # want de SVG bevat CSS-braces die .format zou proberen in te vullen).
     repl = {
         "n_server": n_server, "n_scrape": n_scrape,

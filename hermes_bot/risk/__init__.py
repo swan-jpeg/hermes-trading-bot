@@ -1,4 +1,4 @@
-"""LAAG 6: risico-engine — de harde veiligheidslaag. [[09]]
+"""LAYER 6: risk engine — the hard safety layer. [[09]]
 
 Architectuurverbetering: de Monte Carlo-route ([[08]]) is nu ECHT
 aangesloten op de goedkeuring. `var_95`, `es_95` en `crash_probability`
@@ -13,7 +13,7 @@ from hermes_bot.schemas import MonteCarloResult, RiskApproval, RLRawDecision
 
 
 class RiskEngine:
-    """Zet RL-voorstel om in goedgekeurde, begrensde allocatie.
+    """Convert the RL proposal into an approved, bounded allocation.
 
     Regel: RL voorstelt, Risk keurt goed. Nooit een voorstel
     rechtstreeks naar de executie-laag.
@@ -27,7 +27,7 @@ class RiskEngine:
             "max_leverage": self.cfg.get("max_leverage", 0.0),
             "cash_min_in_crash": self.cfg.get("cash_min_in_crash", 0.30),
             "max_portfolio_drawdown": self.cfg.get("max_portfolio_drawdown", -0.08),
-            # Drempels voor Monte Carlo-begrenzing.
+            # Thresholds for Monte Carlo bounding.
             "max_var_95": self.cfg.get("max_var_95", -0.05),  # -5% VaR95 max
             "max_crash_prob": self.cfg.get("max_crash_prob", 0.10),  # 10% crash-kans max
         }
@@ -45,8 +45,8 @@ class RiskEngine:
         """
         reasons: list[str] = []
 
-        # 0. Exit-besluiten (SELL met exit_reason) worden altijd goedgekeurd —
-        #    winst nemen / verlies beperken mag nooit geblokkeerd worden.
+        # 0. Exit decisions (SELL with exit_reason) are always approved —
+        #    taking profit / limiting loss must never be blocked.
         if decision.action.value == "sell" and decision.exit_reason.value != "none":
             return RiskApproval(
                 approved=True,
@@ -55,7 +55,7 @@ class RiskEngine:
                 adjusted=False,
             )
 
-        # 1. Grootte o.b.v. zekerheid (scale-down bij onzekerheid).
+        # 1. Size based on certainty (scale down on uncertainty).
         size = abs(decision.intent_to_alloc)
         certainty = decision.zekerheid
         scaled = size * (0.5 + 0.5 * certainty)
@@ -68,7 +68,7 @@ class RiskEngine:
         # 3. Monte Carlo-begrenzing (crashweerstand).
         if mc is not None:
             # Hoge VaR95 (groot verwacht verlies) -> verklein positie.
-            # ratio = max_var_95 / var_95 (beide negatief) -> <1 als VaR te laag.
+            # ratio = max_var_95 / var_95 (both negative) -> <1 if VaR is too low.
             if mc.var_95 < self._limits["max_var_95"]:
                 ratio = max(0.0, min(1.0, self._limits["max_var_95"] / mc.var_95))
                 scaled *= ratio
@@ -78,7 +78,7 @@ class RiskEngine:
                 scaled *= 0.5
                 reasons.append(f"crash_prob={mc.crash_probability:.2f} te hoog -> gehalveerd")
 
-        # 4. Basis risk-off bij crash-toestand (regime).
+        # 4. Basic risk-off on crash state (regime).
         in_crash = getattr(portfolio, "regime", None) == "crash"
         if in_crash and scaled > 0.0:
             scaled *= 0.5

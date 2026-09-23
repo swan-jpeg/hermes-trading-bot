@@ -41,7 +41,7 @@ def test_risk_engine_caps_at_asset_limit() -> None:
 
 
 def test_risk_engine_always_approves_exit() -> None:
-    """Winst nemen / verlies beperken mag nooit geblokkeerd worden."""
+    """Taking profit / limiting loss must never be blocked."""
     eng = RiskEngine(_config())
     r = eng.approve(
         _decision("AAPL", Action.SELL, -1.0, exit_reason=ExitReason.TAKE_PROFIT),
@@ -52,11 +52,11 @@ def test_risk_engine_always_approves_exit() -> None:
 
 
 def test_risk_engine_monte_carlo_reduces_alloc() -> None:
-    """Hoge VaR95 / crash-kans verkleint de toegestane allocatie."""
+    """High VaR95 / crash probability reduces the allowed allocation."""
     import numpy as np
 
     eng = RiskEngine(_config())
-    # Lage vol -> allocatie ongewijzigd maar MC-velden gevuld.
+    # Low vol -> allocation unchanged but MC fields filled.
     hist = np.random.default_rng(1).normal(0, 0.005, 250)
     mc = MonteCarloEngine(seed=1, n_paths=2000).simulate(hist, horizon=30)
     r = eng.approve(_decision("AAPL", Action.BUY, 0.10), PortfolioState(), mc)
@@ -64,7 +64,7 @@ def test_risk_engine_monte_carlo_reduces_alloc() -> None:
     assert r.var_95 != 0.0
     assert r.es_95 != 0.0
 
-    # Hoge vol -> VaR95 ver onder -5% drempel -> allocatie moet kleiner worden.
+    # High vol -> VaR95 well below the -5% threshold -> allocation must shrink.
     hist_high = np.random.default_rng(2).normal(0, 0.06, 250)
     mc_high = MonteCarloEngine(seed=2, n_paths=4000).simulate(hist_high, horizon=30)
     r_high = eng.approve(_decision("AAPL", Action.BUY, 0.10), PortfolioState(), mc_high)
@@ -84,7 +84,7 @@ def test_position_stop_loss() -> None:
 
 def test_position_trailing_stop() -> None:
     pos = Position(entity="AAPL", qty=100.0, entry_price=100.0, entry_time=datetime.now(UTC))
-    # Op +12% geweest (peak 112), nu terug naar 106 -> -5.4% vanaf peak = trailing stop.
+    # Was at +12% (peak 112), now back to 106 -> -5.4% from peak = trailing stop.
     assert pos.exit_reason_at(106.0, 112.0) == ExitReason.TRAILING_STOP
 
 
@@ -116,7 +116,7 @@ def test_portfolio_propose_target_sell_reduces() -> None:
 
 
 def test_rule_policy_takes_profit_on_existing_position() -> None:
-    """De RL-policy moet winst nemen op een bestaande positie die boven
+    """The RL policy must take profit on an existing position that is above
     de take-profit staat, ook als sentiment positief blijft."""
     from hermes_bot.rl import RLFusionModel
 

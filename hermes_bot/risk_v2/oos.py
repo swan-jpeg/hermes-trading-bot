@@ -36,7 +36,7 @@ warnings.filterwarnings("ignore")
 OUT = Path(__file__).resolve().parent.parent.parent / "var" / "oos_v1"
 
 # ---------------------------------------------------------------------------
-# LOCKED CONFIG — immutable, exacte kopie van de v2-parameters (commit ffa398c)
+# LOCKED CONFIG — immutable, exact copy of the v2 parameters (commit ffa398c)
 # ---------------------------------------------------------------------------
 LOCKED_CONFIG = {
     "risk": {
@@ -62,7 +62,7 @@ LOCKED_CONFIG = {
         "recovery_lookback": 10,
         # Monte Carlo.
         "seed": 42,
-        # Ablation-toggles (allemaal uit — volledige engine).
+        # Ablation toggles (all off — full engine).
         "_vol_off": False, "_dd_off": False, "_corr_off": False,
         "_mc_off": False, "_regime_off": False, "_certainty_off": False,
     },
@@ -88,7 +88,7 @@ ASSETS = ["SPY", "QQQ", "IWM"]
 
 
 def config_hash() -> str:
-    """SHA-256 checksum van de locked config."""
+    """SHA-256 checksum of the locked config."""
     raw = json.dumps(LOCKED_CONFIG, sort_keys=True).encode()
     return hashlib.sha256(raw).hexdigest()
 
@@ -97,7 +97,7 @@ def config_hash() -> str:
 # STRATEGIEËN
 # ---------------------------------------------------------------------------
 class ConstantLongStrategy:
-    """Stelt elke dag 100% long voor (zekerheid 1.0). Engine beslist."""
+    """Proposes 100% long every day (certainty 1.0). The engine decides."""
 
     name = "constant_long"
 
@@ -110,7 +110,7 @@ class ConstantLongStrategy:
 
 
 # ---------------------------------------------------------------------------
-# OOS RUNNER — draait engine over warm-up+test, meet alleen test
+# OOS RUNNER — runs the engine over warm-up+test, measures only the test
 # ---------------------------------------------------------------------------
 @dataclass
 class OOSDailyLog:
@@ -187,7 +187,7 @@ def run_oos_v2(
     mc_every: int = 20,
     seed: int = 42,
 ) -> OOSResult:
-    """Draai v2 over warm-up+test, meet alleen testperiode."""
+    """Run v2 over warm-up+test, measure only the test period."""
     engine = RiskEngineV2(LOCKED_CONFIG)
     strategy = ConstantLongStrategy()
     mc_engine = MonteCarloEngineV2(seed=seed, n_paths=1000)
@@ -279,7 +279,7 @@ def run_oos_v2(
                 final_exposure=breakdown.final_exposure, reason=breakdown.reason,
             ))
 
-    # Metrics alleen over testperiode.
+    # Metrics only over the test period.
     test_mask = [(test_start_dt <= t <= test_end_dt) for t in timestamps]
     test_equity = [e for e, m in zip(equity, test_mask, strict=False) if m]
     test_exp = [e for e, m in zip(exposure_series, test_mask, strict=False) if m]
@@ -299,7 +299,7 @@ def run_buy_hold(prices: pd.DataFrame, test_start: str, test_end: str) -> OOSRes
     test_start_dt = pd.Timestamp(test_start)
     test_end_dt = pd.Timestamp(test_end)
 
-    # Koop op eerste testdag, houd vast.
+    # Buy on the first test day, hold.
     first_test_idx = next(i for i, t in enumerate(idx_list) if t >= test_start_dt)
     entry_price = closes[first_test_idx]
     qty = 100_000.0 / entry_price
@@ -438,15 +438,15 @@ def find_drawdowns(equity: list[float], timestamps: list[object],
 # INTEGRITY CHECKS
 # ---------------------------------------------------------------------------
 def integrity_checks() -> dict:
-    """Automatische controles op leakage/bias."""
+    """Automatic checks for leakage/bias."""
     checks = {}
     # 1. Config immutable: hash klopt.
     checks["config_hash"] = config_hash()
     # 2. Geen look-ahead: engine gebruikt alleen historische returns (structureel).
     checks["look_ahead_bias"] = "PASS — engine gebruikt alleen historische returns (structureel)"
-    # 3. Warm-up: testdata niet gebruikt voor init (warm-up is vóór test).
+    # 3. Warm-up: test data not used for init (warm-up is before the test).
     checks["warmup_before_test"] = "PASS — warm-up (2022-2023) is vóór test (2024-2026)"
-    # 4. State leakage: engine state blijft behouden over warm-up+test (realistisch).
+    # 4. State leakage: engine state is preserved over warm-up+test (realistic).
     checks["state_leakage"] = "PASS — state behouden, geen reset"
     # 5. Train/test contamination: parameters gelockt vóór OOS.
     checks["train_test_contamination"] = "PASS — parameters gelockt (hash), geen tuning op testdata"
@@ -477,7 +477,7 @@ def run_all() -> dict:
             "n_obs": len(prices), "adjustment": "auto_adjust (corporate actions)",
             "missing_values": int(prices.isna().sum().sum()),
         }
-        # Filter op warm-up + test.
+        # Filter on warm-up + test.
         mask = (prices.index >= pd.Timestamp(SPLIT["warmup_start"])) & \
                (prices.index <= pd.Timestamp(SPLIT["test_end"]))
         p = prices[mask]
@@ -489,7 +489,7 @@ def run_all() -> dict:
         results[sym] = {
             "buy_hold": bh.metrics, "old": old.metrics, "v2": v2.metrics,
         }
-        # Sla logs op.
+        # Save logs.
         (OUT / f"{sym}_v2_daily_log.json").write_text(json.dumps(
             [e.__dict__ for e in v2.log], indent=1))
         (OUT / f"{sym}_v2_equity.json").write_text(json.dumps({

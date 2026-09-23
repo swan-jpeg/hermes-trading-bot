@@ -1,4 +1,4 @@
-"""Visualisaties voor Risk Engine v2 — equity, drawdown, exposure, risk score.
+"""Visualizations for Risk Engine v2 — equity, drawdown, exposure, risk score.
 
 Genereert HTML-plots (zelfstandig, geen matplotlib nodig) naar var/forensic_v2/plots/.
 """
@@ -27,7 +27,7 @@ def _svg_line(ts, series, color, w=900, h=300, label=""):
 
 
 def _svg_area(ts, series, color, w=900, h=300):
-    """SVG-gebiedsdiagram (voor exposure 0..1)."""
+    """SVG area chart (for exposure 0..1)."""
     if not series:
         return ""
     n = len(series)
@@ -56,7 +56,7 @@ svg{{width:100%;height:auto}}
 
 
 def generate_plots(scenario: str = "fast_crash") -> None:
-    """Genereer plots voor een scenario (v2-log)."""
+    """Generate plots for a scenario (v2 log)."""
     OUT.mkdir(parents=True, exist_ok=True)
     log_path = OUT.parent / "scenarios" / f"v2_{scenario}_log.json"
     if not log_path.exists():

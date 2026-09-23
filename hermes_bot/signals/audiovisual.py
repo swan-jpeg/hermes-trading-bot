@@ -5,7 +5,7 @@ from hermes_bot.schemas import BaseSignal, SourceKind
 
 
 class SpeechSignal(BaseSignal):
-    """Structureel signaal uit audio/video-analyse. [[03]]"""
+    """Structural signal from audio/video analysis. [[03]]"""
 
     source: SourceKind = SourceKind.SPEECH
     transcript: str = ""

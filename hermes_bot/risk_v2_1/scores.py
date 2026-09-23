@@ -30,7 +30,7 @@ import numpy as np
 # AXIS 1 — RISK ENVIRONMENT SCORE (0-100, hoger = gevaarlijker)
 # ---------------------------------------------------------------------------
 class RiskEnvironmentScore:
-    """Berekent de risico-score uit marktcondities (alleen historische info)."""
+    """Computes the risk score from market conditions (historical info only)."""
 
     def __init__(self, config: dict) -> None:
         c = config.get("risk", {})
@@ -50,35 +50,35 @@ class RiskEnvironmentScore:
         crash_prob: float,
         extreme_return: float,
     ) -> float:
-        """Combineer risico-inputs tot een 0-100 score.
+        """Combine risk inputs into a 0-100 score.
 
         Elke component draagt 0-100 bij; het gewogen gemiddelde is de score.
         """
-        # Vol-component: vol t.o.v. target. 0 bij lage vol, 100 bij 2x target.
+        # Vol component: vol vs target. 0 at low vol, 100 at 2x target.
         vol_comp = 0.0
         if vol > 0:
             vol_comp = float(np.clip((vol / max(0.05, self.vol_target) - 0.5) / 1.5, 0, 1) * 100)
 
-        # Drawdown-component: 0 bij geen dd, 100 bij max_drawdown of dieper.
+        # Drawdown component: 0 at no dd, 100 at max_drawdown or deeper.
         dd_comp = 0.0
         if drawdown < 0:
             dd_comp = float(np.clip(abs(drawdown) / abs(self.max_drawdown), 0, 1) * 100)
 
-        # Correlatie-component: 0 bij lage corr, 100 bij corr_threshold+.
+        # Correlation component: 0 at low corr, 100 at corr_threshold+.
         corr_comp = 0.0
         if corr > 0:
             corr_comp = float(np.clip(corr / self.corr_threshold, 0, 1) * 100)
 
-        # Tail-risk component: VaR en crash-kans.
+        # Tail-risk component: VaR and crash probability.
         tail_comp = 0.0
         if var_95 < 0:
             tail_comp += float(np.clip(abs(var_95) / 0.10, 0, 1) * 50)
         tail_comp += float(np.clip(crash_prob / 0.30, 0, 1) * 50)
 
-        # Extreme-return component: 0 bij normaal, 100 bij -5% dag.
+        # Extreme-return component: 0 at normal, 100 at -5% day.
         extreme_comp = float(np.clip(abs(extreme_return) / 0.05, 0, 1) * 100)
 
-        # Gewogen gemiddelde (vol en dd wegen zwaarst).
+        # Weighted average (vol and dd weigh most).
         score = (
             0.30 * vol_comp
             + 0.30 * dd_comp
@@ -93,7 +93,7 @@ class RiskEnvironmentScore:
 # AXIS 2 — OPPORTUNITY SCORE (0-100, hoger = meer kans om risico te nemen)
 # ---------------------------------------------------------------------------
 class OpportunityScore:
-    """Berekent de opportunity-score uit marktcondities + alpha-signalen.
+    """Computes the opportunity score from market conditions + alpha signals.
 
     Opportunity is NIET (100 - risk). Het meet of er reden is om risico te
     nemen: positieve trend, momentum, vol-normalisatie, herstel, stabiele
@@ -116,7 +116,7 @@ class OpportunityScore:
         corr: float,
         alpha_signals: dict | None = None,
     ) -> tuple[float, dict]:
-        """Combineer opportunity-inputs tot een 0-100 score.
+        """Combine opportunity inputs into a 0-100 score.
 
         Returns: (score, breakdown) — breakdown toont elke component + welke
         alpha-signalen beschikbaar zijn.
@@ -128,13 +128,13 @@ class OpportunityScore:
         if len(returns) >= 5:
             recent = np.asarray(returns[-5:])
             mom = float(np.mean(recent))
-            # 0 bij negatief/neutraal, 100 bij +0.5% dag-gemiddelde.
+            # 0 at negative/neutral, 100 at +0.5% daily average.
             momentum_comp = float(np.clip(mom / 0.005, 0, 1) * 100)
 
-        # Vol-normalisatie-component: vol terug naar target = opportunity.
+        # Vol normalization component: vol back to target = opportunity.
         vol_norm_comp = 0.0
         if vol > 0:
-            # Hoe dichter vol bij target, hoe hoger de opportunity.
+            # The closer vol is to target, the higher the opportunity.
             ratio = vol / max(0.05, self.vol_target)
             vol_norm_comp = float(np.clip(1.0 - abs(ratio - 1.0) / 1.0, 0, 1) * 100)
 
@@ -150,7 +150,7 @@ class OpportunityScore:
         elif corr < 0.6:
             corr_comp = 50.0
 
-        # Alpha-signalen (interfaces, neutraal als niet beschikbaar).
+        # Alpha signals (interfaces, neutral if unavailable).
         alpha_comp = 0.0
         alpha_breakdown = {}
         for key in ["prediction_confidence", "model_agreement", "fundamental_quality",
@@ -162,7 +162,7 @@ class OpportunityScore:
             else:
                 alpha_breakdown[key] = "unavailable"
 
-        # Gewogen gemiddelde (momentum en vol-normalisatie wegen zwaarst).
+        # Weighted average (momentum and vol normalization weigh most).
         score = (
             0.35 * momentum_comp
             + 0.25 * vol_norm_comp
@@ -185,7 +185,7 @@ class OpportunityScore:
 # TWEEDIMENSIONALE RISK-BUDGET FUNCTIE
 # ---------------------------------------------------------------------------
 def risk_budget_from_scores(risk_score: float, opp_score: float) -> float:
-    """Zet (risk, opportunity) om in een continu risk budget [0,1].
+    """Maps (risk, opportunity) into a continuous risk budget [0,1].
 
     Matrix:
         High risk + low opp  -> DEFENSIVE (laag budget)
@@ -206,7 +206,7 @@ def risk_budget_from_scores(risk_score: float, opp_score: float) -> float:
 
 
 def state_label(risk_score: float, opp_score: float) -> str:
-    """Beschrijvende staat (niet de sizing-mechanisme)."""
+    """Descriptive state (not the sizing mechanism)."""
     risk_high = risk_score > 50
     opp_high = opp_score > 50
     if risk_high and not opp_high:

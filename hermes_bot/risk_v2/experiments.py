@@ -1,4 +1,4 @@
-"""Experiment-runner voor Risk Engine v2 — alle experimenten A-D + sensitivity + capacity.
+"""Experiment runner for Risk Engine v2 — all experiments A-D + sensitivity + capacity.
 
 Draait en slaat op:
 - EXPERIMENT A: harde exposure caps (10/25/50/75/100%)
@@ -31,7 +31,7 @@ OUT = Path(__file__).resolve().parent.parent.parent / "var" / "forensic_v2"
 # EXPERIMENT A — harde exposure caps
 # ---------------------------------------------------------------------------
 def experiment_a(cfg: dict) -> dict:
-    """Test exposure caps 10/25/50/75/100% op het fast_crash-scenario."""
+    """Test exposure caps 10/25/50/75/100% on the fast_crash scenario."""
     prices = make_scenario("fast_crash")
     results = {}
     for cap in [0.10, 0.25, 0.50, 0.75, 1.00]:
@@ -47,11 +47,11 @@ def experiment_a(cfg: dict) -> dict:
 # EXPERIMENT B — individuele mechanismen + ablations
 # ---------------------------------------------------------------------------
 def experiment_b(cfg: dict) -> dict:
-    """Test individuele mechanismen en combinaties op fast_crash."""
+    """Test individual mechanisms and combinations on fast_crash."""
     prices = make_scenario("fast_crash")
     base_risk = cfg.get("risk", {})
 
-    # Elke variant zet alle andere mechanismen uit (alleen dat mechanisme actief).
+    # Each variant disables all other mechanisms (only that mechanism active).
     variants = {
         "baseline": {},
         "volatility_only": {"_dd_off": True, "_corr_off": True, "_mc_off": True,
@@ -121,7 +121,7 @@ def experiment_c(cfg: dict) -> dict:
 # EXPERIMENT D — echte marktdata
 # ---------------------------------------------------------------------------
 def experiment_d(cfg: dict) -> dict:
-    """Echte marktdata via yfinance: SPY/QQQ/IWM over meerdere perioden."""
+    """Real market data via yfinance: SPY/QQQ/IWM over multiple periods."""
     from hermes_bot.backtest import load_prices
 
     results = {}
@@ -144,7 +144,7 @@ def experiment_d(cfg: dict) -> dict:
 # SENSITIVITY ANALYSIS
 # ---------------------------------------------------------------------------
 def sensitivity(cfg: dict) -> dict:
-    """Test parametergevoeligheid op fast_crash."""
+    """Test parameter sensitivity on fast_crash."""
     prices = make_scenario("fast_crash")
     base_risk = cfg.get("risk", {})
     params = {

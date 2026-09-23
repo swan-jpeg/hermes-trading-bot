@@ -34,7 +34,7 @@ from hermes_bot.risk_v2_1 import RiskEngineV21
 
 @dataclass
 class PipelineResult:
-    """Volledige uitvoer van één keten-cyclus, met alle tussenwaardes."""
+    """Full output of one chain cycle, with all intermediate values."""
 
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     web_inputs: list[dict] = field(default_factory=list)
@@ -52,7 +52,7 @@ def collect_web_inputs(
     reports: list[dict] | None = None,
     alerts: list[dict] | None = None,
 ) -> list[dict]:
-    """Haal web-inputs op (offline-demo als niets aangeleverd wordt)."""
+    """Fetch web inputs (offline demo if nothing is provided)."""
     from hermes_bot.data.scraper import (
         demo_alert_records,
         demo_report_records,
@@ -68,7 +68,7 @@ def collect_web_inputs(
 
 
 def _to_report_signals(reports: list[dict] | None) -> list:
-    """Zet ruwe webrapport-dicts om naar ReportSignal-objecten.
+    """Convert raw web report dicts into ReportSignal objects.
 
     Dit is de correcte integratie: de uitbreidingen (RegionalScorer,
     BottleneckAnalyzer) werken op ReportSignal-objecten, niet op ruwe dicts.
@@ -94,7 +94,7 @@ def _to_report_signals(reports: list[dict] | None) -> list:
 
 
 def build_bottleneck_inputs(reports: list[dict] | None = None) -> list[dict]:
-    """Bottleneck-agent als fusion-input (geïntegreerd, niet los).
+    """Bottleneck agent as a fusion input (integrated, not standalone).
 
     Haalt vraagsignalen uit webrapporten, koppelt bedrijven aan
     supply-chain knooppunten, en geeft per-bedrijf ratings als fusie-inputs.
@@ -114,7 +114,7 @@ def build_bottleneck_inputs(reports: list[dict] | None = None) -> list[dict]:
 
 
 def build_regional_scores_input(reports: list[dict] | None = None) -> dict:
-    """Regionale scores als fusion-input (geïntegreerd)."""
+    """Regional scores as a fusion input (integrated)."""
     from hermes_bot.data.scraper import demo_report_records
 
     scorer = RegionalScorer()
@@ -131,13 +131,13 @@ def build_regional_scores_input(reports: list[dict] | None = None) -> dict:
 
 
 def build_regime_input(features: dict | None = None) -> dict:
-    """Regime-detectie als risk-input (geïntegreerd met v2.1)."""
+    """Regime detection as a risk input (integrated with v2.1)."""
     detector = RegimeDetector()
     features = features or {
         "vix": 18, "credit_spread": 1.2, "yield_curve": 0.3, "momentum": 0.04
     }
     regime = detector.detect(features)
-    # Vertaal regime naar een fusie-sentiment + risk-gate.
+    # Translate regime into a fusion sentiment + risk gate.
     regime_sent = {"bull": 0.5, "bear": -0.4, "highvol": -0.2, "crash": -0.8}.get(regime, 0.0)
     return {
         "source": "agent",  # regime-feature als agent-achtige macro-input
@@ -149,7 +149,7 @@ def build_regime_input(features: dict | None = None) -> dict:
 
 
 class Pipeline:
-    """Orchestreert de volledige architectuurketen (geïntegreerd)."""
+    """Orchestrates the full architecture chain (integrated)."""
 
     def __init__(self, config: dict | None = None) -> None:
         self.cfg = config or {}
@@ -167,12 +167,12 @@ class Pipeline:
         reports: list[dict] | None = None,
         regime_features: dict | None = None,
     ) -> PipelineResult:
-        """Draai één volledige cyclus en geef alle tussenwaardes."""
+        """Run one full cycle and return all intermediate values."""
         # 1. Web-inputs (speech/reports/alerts).
         inputs = web_inputs or collect_web_inputs()
         self.web_inputs = inputs
 
-        # 2. Outbreidingen als fusion-INPUTS (geïntegreerd, niet los).
+        # 2. Extensions as fusion INPUTS (integrated, not standalone).
         bottleneck_inputs = build_bottleneck_inputs(reports)
         regional_input = build_regional_scores_input(reports)
         regime_input = build_regime_input(regime_features)
@@ -182,7 +182,7 @@ class Pipeline:
         # 3. Fusion combineert alle bronnen.
         fused = self.fusion.fuse(all_inputs)
 
-        # 4. Risk engine (v2.1) met de v2.1-config.
+        # 4. Risk engine (v2.1) with the v2.1 config.
         decision_sent = fused.emotie.get("sentiment", 0.0)
         equity = self.portfolio.cash + 0.0  # cash-only start
         mc = None
@@ -199,7 +199,7 @@ class Pipeline:
         )
         exposure, breakdown = self.risk.approve(decision, self.portfolio, equity, mc)
 
-        # 5. Bottleneck-ratings teruggeven (voor logging/attributie).
+        # 5. Return bottleneck ratings (for logging/attribution).
         ratings = {
             i["entity_id"]: round(i["bottleneck_score"], 4)
             for i in bottleneck_inputs if "bottleneck_score" in i
@@ -221,7 +221,7 @@ class Pipeline:
 
 
 def run_pipeline(price: float = 100.0) -> dict:
-    """Kort entry-point voor CLI/tests."""
+    """Short entry point for CLI/tests."""
     return Pipeline().run(price=price).__dict__
 
 

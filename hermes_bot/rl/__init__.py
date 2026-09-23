@@ -19,7 +19,7 @@ from hermes_bot.schemas import Action, ExitReason, Position, RLRawDecision
 
 
 class BaseRLPolicy:
-    """Interface voor de RL-beslissingslaag."""
+    """Interface for the RL decision layer."""
 
     def act(self, state: dict) -> RLRawDecision:
         raise NotImplementedError
@@ -42,12 +42,12 @@ class RulePolicy(BaseRLPolicy):
         position: Position | None = state.get("position")
         peak = state.get("peak", current_price)
 
-        # --- 1. Exit-regels op bestaande posities (winst nemen / verlies beperken).
+        # --- 1. Exit rules on existing positions (take profit / limit loss).
         if position is not None and current_price > 0:
             reason = position.exit_reason_at(current_price, peak)
             if reason != ExitReason.NONE:
-                # intent_to_alloc is een portfolio-gewicht (-1..+1), niet een
-                # absolute qty. Sluit de positie volledig (gewicht -1 = 100%).
+                # intent_to_alloc is a portfolio weight (-1..+1), not an
+                # absolute qty. Close the position fully (weight -1 = 100%).
                 pnl = position.unrealized_pnl_pct(current_price)
                 return RLRawDecision(
                     entity=entity,
@@ -59,11 +59,11 @@ class RulePolicy(BaseRLPolicy):
                     exit_reason=reason,
                 )
 
-        # --- 2. Sentiment-gestuurde richting op nieuwe/bestaande posities.
+        # --- 2. Sentiment-driven direction on new/existing positions.
         if sentiment > threshold and zekerheid > 0.5:
             action, alloc = Action.BUY, min(0.1, sentiment * zekerheid)
         elif sentiment < -threshold and zekerheid > 0.5:
-            # Verkoop (of verklein) bij negatief sentiment.
+            # Sell (or reduce) on negative sentiment.
             size = min(0.1, abs(sentiment) * zekerheid)
             if position is not None:
                 size = min(size, position.qty)
@@ -95,7 +95,7 @@ class RLFusionModel:
         portfolio_state: PortfolioState,
         current_price: float = 0.0,
     ) -> RLRawDecision:
-        """Bouw state-vector en laat policy een voorstel doen.
+        """Build the state vector and let the policy make a proposal.
 
         Dit voorstel gaat ALTIJD eerst door de risico-engine.
         portfolio_state is nu een PortfolioState (niet dict) zodat de policy

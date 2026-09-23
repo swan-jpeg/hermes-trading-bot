@@ -1,4 +1,4 @@
-"""Experiment-runner voor Risk Engine v2.1 — vergelijking met frozen v2.
+"""Experiment runner for Risk Engine v2.1 — comparison with frozen v2.
 
 Draait v2.1 vs v2 vs old vs B&H op:
 - synthetische scenario's (crash-regimes)
@@ -26,7 +26,7 @@ OUT = Path(__file__).resolve().parent.parent.parent / "var" / "forensic_v21"
 
 
 def _v21_config(cfg: dict) -> dict:
-    """v2.1 config: base op v2 risk-config + v2.1-specifieke parameters."""
+    """v2.1 config: based on the v2 risk config + v2.1-specific parameters."""
     risk = cfg.get("risk", {})
     return {"risk": {
         **risk,
@@ -42,7 +42,7 @@ def _v21_config(cfg: dict) -> dict:
 
 
 def scenario_comparison(cfg: dict) -> dict:
-    """Vergelijk v2.1 vs v2 vs old vs B&H op synthetische scenario's."""
+    """Compare v2.1 vs v2 vs old vs B&H on synthetic scenarios."""
     from hermes_bot.forensic import run_forensic  # old
     from hermes_bot.risk_v2.backtest import run_v2  # frozen v2
 
@@ -70,7 +70,7 @@ def scenario_comparison(cfg: dict) -> dict:
 
 
 def real_market_comparison(cfg: dict) -> dict:
-    """Vergelijk v2.1 vs v2 op echte marktdata."""
+    """Compare v2.1 vs v2 on real market data."""
     from hermes_bot.backtest import load_prices
     from hermes_bot.risk_v2.backtest import run_v2
 
@@ -95,7 +95,7 @@ def real_market_comparison(cfg: dict) -> dict:
 
 
 def oos_comparison(cfg: dict) -> dict:
-    """Vergelijk v2.1 vs v2 op de OOS-periode (2024-2026, warm-up 2022-2023)."""
+    """Compare v2.1 vs v2 on the OOS period (2024-2026, warm-up 2022-2023)."""
     from hermes_bot.backtest import load_prices
     from hermes_bot.risk_v2.oos import run_oos_v2  # frozen v2 OOS-runner
 
@@ -110,7 +110,7 @@ def oos_comparison(cfg: dict) -> dict:
         p = prices[mask]
         v2 = run_oos_v2(p, "2024-01-01", "2026-09-21", name=f"v2_{sym}")
         v21 = run_v21(p, _v21_config(cfg), name=f"v21_{sym}")
-        # v21 metrics alleen over testperiode.
+        # v21 metrics only over the test period.
         test_mask = [(t >= pd.Timestamp("2024-01-01")) for t in v21.timestamps]
         test_equity = [e for e, m in zip(v21.equity, test_mask, strict=False) if m]
         test_exp = [e for e, m in zip(v21.exposure, test_mask, strict=False) if m]

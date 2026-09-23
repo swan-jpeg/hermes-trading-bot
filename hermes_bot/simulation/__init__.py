@@ -21,7 +21,7 @@ class MonteCarloEngine:
         horizon: int,
         corr: np.ndarray | None = None,
     ) -> MonteCarloResult:
-        """Blok-bootstrap van rendementen over `horizon` dagen.
+        """Block bootstrap of returns over `horizon` days.
 
         returns: 1D (enkel asset) of 2D (n_assets x n_days) dagrendementen.
         corr: optionele correlatiematrix voor multi-asset (Cholesky).
@@ -31,12 +31,12 @@ class MonteCarloEngine:
             returns = returns.reshape(1, -1)
         n_assets, n_days = returns.shape
 
-        # Multi-asset: decorreleer met Cholesky als correlatie gegeven is.
+        # Multi-asset: decorrelate with Cholesky if correlation is given.
         if corr is not None and n_assets > 1:
             L = np.linalg.cholesky(np.asarray(corr, dtype=float))
             returns = (L @ returns).T  # gecorreleerde rendementen
 
-        # Blok-bootstrap: kies willekeurige startdagen, loop horizon dagen.
+        # Block bootstrap: pick random start days, loop horizon days.
         block = max(1, min(20, n_days // 4))  # blokgrootte behoudt autocorrelatie
         paths = np.zeros((self.n_paths, n_assets))
         for i in range(self.n_paths):
@@ -50,17 +50,17 @@ class MonteCarloEngine:
                 day += take
             paths[i] = cum
 
-        # Portfolio-rendement = gemiddelde over assets (gelijk gewicht).
+        # Portfolio return = average over assets (equal weight).
         port = paths.mean(axis=1)
         pct = {q: float(np.percentile(port, q)) for q in (5, 10, 25, 50, 75, 90, 95)}
 
-        # VaR95 en Expected Shortfall95 (linkerstaart).
+        # VaR95 and Expected Shortfall95 (left tail).
         var_95 = float(np.percentile(port, 5))
         tail = port[port <= var_95]
         es_95 = float(tail.mean()) if tail.size else var_95
 
         # Drawdown-distributie: max cumulatief verlies per pad.
-        # Per pad: gemiddelde dag-return over assets -> equity curve over horizon.
+        # Per path: average daily return over assets -> equity curve over horizon.
         dd = np.zeros(self.n_paths)
         for i in range(self.n_paths):
             daily = paths[i].mean() / horizon  # gelijkmatig verdeeld over horizon
@@ -69,7 +69,7 @@ class MonteCarloEngine:
             dd[i] = float(np.min(eq / peak - 1))
         dd_pct = {q: float(np.percentile(dd, q)) for q in (50, 90, 95)}
 
-        # Crash-kans: kans dat drawdown < -20% binnen horizon.
+        # Crash probability: chance that drawdown < -20% within the horizon.
         crash_probability = float(np.mean(dd < -0.20))
 
         return MonteCarloResult(
@@ -83,7 +83,7 @@ class MonteCarloEngine:
         )
 
     def stress_scenarios(self, current_portfolio: dict, scenarios: dict) -> dict:
-        """Test huidige portefeuille tegen crash-scenario's.
+        """Test the current portfolio against crash scenarios.
 
         scenarios: {naam: {asset: rendement}} bijv. {"2008": {"AAPL": -0.5, ...}}.
         Retourneert per scenario het portfolio-rendement.

@@ -1,4 +1,4 @@
-"""Bouw een downloadbare zip van het project voor GitHub-export (ook via iPad).
+"""Build a downloadable zip of the project for GitHub export (also via iPad).
 
 Slaat .venv, caches, var/ en .env over. Geeft op iPad de zip die je direct
 naar GitHub-web (Upload files) of GitHub-mobile kunt pompen.
@@ -17,7 +17,7 @@ _SKIP_EXT = {".pyc", ".db", ".sqlite"}
 
 
 def project_files(root: Path | None = None) -> list[Path]:
-    """Alle projectbestanden, gefilterd — geen venv/caches/secrets."""
+    """All project files, filtered — no venv/caches/secrets."""
     root = root or ROOT
     out: list[Path] = []
     for p in sorted(root.rglob("*")):
@@ -28,7 +28,7 @@ def project_files(root: Path | None = None) -> list[Path]:
             continue
         if p.suffix.lower() in _SKIP_EXT:
             continue
-        # Nooit .env of credentials.
+        # Never .env or credentials.
         if rel.name in (".env",) or rel.name.endswith("_key.txt"):
             continue
         out.append(p)
@@ -36,7 +36,7 @@ def project_files(root: Path | None = None) -> list[Path]:
 
 
 def build_zip_bytes(root: Path | None = None) -> bytes:
-    """Maak een .zip (bytes) van het project voor download."""
+    """Create a .zip (bytes) of the project for download."""
     root = root or ROOT
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -51,10 +51,10 @@ def build_zip_bytes(root: Path | None = None) -> bytes:
 
 
 def build_github_instructions(user: str = "jouw-gebruikersnaam") -> str:
-    """Korte GitHub-push-instructies (ook bruikbaar vanaf iPad)."""
+    """Short GitHub push instructions (also usable from iPad)."""
     return f"""# Hermes Trading Bot — naar GitHub zetten
 
-## Optie A — via deze zip (werkt op iPad en elke browser)
+## Option A — via this zip (works on iPad and any browser)
 1. Download de zip hierboven (knop 'Download project (.zip)').
 2. Ga naar https://github.com/new  → maak een nieuw publiek repo
    (naam: hermes-trading-bot).
@@ -62,7 +62,7 @@ def build_github_instructions(user: str = "jouw-gebruikersnaam") -> str:
    bestanden erin. (Op iPad kun je ook de GitHub-app gebruiken.)
 4. Klik **Commit changes**.
 
-## Optie B — via git (op desktop / deze server)
+## Option B — via git (on desktop / this server)
 ```bash
 cd ~/trading-bot
 git init -b main
@@ -71,7 +71,7 @@ git remote add origin https://github.com/{user}/hermes-trading-bot.git
 git push -u origin main
 ```
 
-## Daarna (op je Windows-pc of iPad)
+## Afterwards (on your Windows PC or iPad)
 - Download de zip / clone de repo.
 - Windows: run `install_windows.bat` (vereist Python 3.11+ en uv).
 - iPad: open in GitHub-app, of gebruik een git-client.

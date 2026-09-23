@@ -1,4 +1,4 @@
-"""Backtest-runner voor de webui: een losse functie met nette output."""
+"""Backtest runner for the webui: a standalone function with clean output."""
 from __future__ import annotations
 
 import json
@@ -18,7 +18,7 @@ def run_backtest(
     vol_target: float = 0.125,
     max_weight: float = 0.95,
 ) -> dict:
-    """Draai een backtest en geef een JSON-serializable dict terug.
+    """Run a backtest and return a JSON-serializable dict.
 
     use_live=True -> echte marktdata via yfinance; anders synthetic.
     """
@@ -28,7 +28,7 @@ def run_backtest(
         else:
             prices = generate_synthetic_prices(n=500)
     except Exception as e:
-        # Fallback naar synthetic bij netwerk-fout.
+        # Fall back to synthetic on network error.
         prices = generate_synthetic_prices(n=500)
         symbol = f"{symbol} (synthetic — live-fout: {e})"
 
@@ -42,9 +42,9 @@ def run_backtest(
     }
     r = Backtester().run(prices, strategy, risk_config=risk_cfg)
 
-    # Pack naar JSON voor de webui-chart.
+    # Pack into JSON for the webui chart.
     n = len(r.equity_curve)
-    # Sample tot max 400 punten voor de chart.
+    # Sample up to max 400 points for the chart.
     step = max(1, n // 400)
     tx = [str(t.date()) for t in r.timestamps[::step]]
     equity = [round(e, 2) for e in r.equity_curve[::step]]

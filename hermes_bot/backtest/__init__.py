@@ -1,4 +1,4 @@
-"""LAAG 6: backtest-engine — de verplichte poort vóór geld. [[13]]
+"""LAYER 6: backtest engine — the mandatory gate before money. [[13]]
 
 Echte event-driven backtest die de RISICO-ENGINE (RiskEngine) gebruikt voor
 position sizing, drawdown-guard en crashweerstand, en vergelijkt met een
@@ -49,7 +49,7 @@ def _sortino(returns: np.ndarray) -> float:
 
 
 class Strategy:
-    """Basis-interface voor een backtest-strategie."""
+    """Base interface for a backtest strategy."""
 
     name = "base"
 
@@ -83,7 +83,7 @@ class VolTargetStrategy(Strategy):
         prices = np.asarray(self.hist_prices[-self.lookback :], dtype=float)
         if prices.size < 2:
             return 0.0
-        # Rendementen van de prijzen (niet de prijsverschillen zelf).
+        # Returns from prices (not the price differences themselves).
         rets = np.diff(prices) / prices[:-1]
         if rets.size == 0 or rets.std() == 0:
             return 0.0
@@ -95,11 +95,11 @@ class VolTargetStrategy(Strategy):
         vol = self._current_vol(price)
         self._last_vol = vol
 
-        # Sentiment vervangen door een prijsgedreven signaal: momentum.
+        # Sentiment replaced by a price-driven signal: momentum.
         hist = np.asarray(self.hist_prices[-6:], dtype=float)
         rets = np.diff(hist) / hist[:-1] if hist.size > 1 else np.array([])
         momentum = float(rets.sum()) if rets.size else 0.0
-        # Genormaliseerd momentum: z-score-achtig over de lookback.
+        # Normalized momentum: z-score-like over the lookback.
         if len(self.hist_prices) >= 20:
             window = np.asarray(self.hist_prices[-20:])
             wrets = np.diff(window) / window[:-1]
@@ -107,14 +107,14 @@ class VolTargetStrategy(Strategy):
                 momentum = float((wrets[-5:].mean()) / wrets.std())
         sentiment = float(np.clip(momentum, -1, 1))
 
-        # Position-sizing o.b.v. vol: hoe hoger de vol, hoe kleiner de positie.
+        # Position sizing based on vol: the higher the vol, the smaller the position.
         if vol > 0:
             vol_scale = min(1.0, self.ann_vol_target / vol)
         else:
             vol_scale = 1.0
         alloc = 0.0
         if vol_scale > self.entry_exit:
-            # Minder conservatief: 90% van vol-schaal, gekapt op 0.95.
+            # Less conservative: 90% of the vol scale, capped at 0.95.
             alloc = min(0.95, 0.9 * vol_scale)  # vol-targeting position size
         action = "hold"
         exit_reason = ExitReason.NONE
@@ -137,7 +137,7 @@ class VolTargetStrategy(Strategy):
                     zekerheid=0.9, timestamp=datetime.now(),
                     rationale="risk-off: vol te hoog", exit_reason=ExitReason.RISK_OFF,
                 )
-            # Positie open en vol ok -> houd (geen her-aankoop).
+            # Position open and vol ok -> hold (no re-buy).
             action = "hold"
             alloc = 0.0
         elif alloc > 0:
@@ -152,7 +152,7 @@ class VolTargetStrategy(Strategy):
 
 
 class BuyAndHoldStrategy(Strategy):
-    """Benchmark: koop op dag 1, houd vast."""
+    """Benchmark: buy on day 1, hold."""
 
     name = "buy_and_hold"
 
@@ -167,7 +167,7 @@ class BuyAndHoldStrategy(Strategy):
 
 
 class Backtester:
-    """Event-driven backtester: strategie + RiskEngine over een prijsreeks."""
+    """Event-driven backtester: strategy + RiskEngine over a price series."""
 
     def __init__(self, config: dict | None = None) -> None:
         self.cfg = config or {}
@@ -187,7 +187,7 @@ class Backtester:
         initial_capital: float = 100_000.0,
         risk_config: dict | None = None,
     ) -> BacktestResult:
-        """Draai de backtest. `prices`: DataFrame met 'close' (en evt OHLCV)."""
+        """Run the backtest. `prices`: DataFrame with 'close' (and optionally OHLCV)."""
         entity = prices.columns[0] if isinstance(prices, pd.Series) else "asset"
         if isinstance(prices, pd.Series):
             close = prices
@@ -195,7 +195,7 @@ class Backtester:
         if "close" not in prices.columns and len(prices.columns) == 1:
             prices = prices.rename(columns={prices.columns[0]: "close"})
 
-        # ---------- RISK-ENGINE (de harde laag) ----------
+        # ---------- RISK ENGINE (the hard layer) ----------
         from hermes_bot.risk import RiskEngine
         self.risk = RiskEngine(risk_config or self.cfg)
 
@@ -220,8 +220,8 @@ class Backtester:
                 continue
             peak = max(peak, price)
             portfolio.peaks = {"asset": peak}
-            # Sync de echte positie terug naar portfolio zodat de strategie
-            # en RiskEngine de open positie zien (prijs-bewustzijn).
+            # Sync the real position back to the portfolio so the strategy
+            # and RiskEngine see the open position (price awareness).
             if qty > 0:
                 portfolio.positions = {
                     "asset": Position(
@@ -235,10 +235,10 @@ class Backtester:
                 portfolio.positions = {}
                 portfolio.cash = cash
 
-            # Strategie stelt voor; RiskEngine keurt goed.
+            # Strategy proposes; RiskEngine approves.
             decision = strategy.decide(i, row, portfolio)
 
-            # Monte Carlo voor crashweerstand (periodiek, niet elke dag).
+            # Monte Carlo for crash resilience (periodic, not every day).
             mc = None
             if len(daily_returns) >= 30 and i % 20 == 0:
                 mc = self._mc_from_returns(np.asarray(daily_returns[-60:]))
@@ -320,19 +320,19 @@ class Backtester:
 
 
 def load_prices(symbol: str, period: str = "2y", interval: str = "1d") -> pd.DataFrame:
-    """Haal koersen op via yfinance (gratis) en geef 'close'-DF terug."""
+    """Fetch prices via yfinance (free) and return a 'close' DataFrame."""
     import yfinance as yf
 
     df = yf.download(symbol, period=period, interval=interval, progress=False, auto_adjust=True)
     if df is None or df.empty:
         raise RuntimeError(f"Geen data voor {symbol}")
-    # yfinance kan een DataFrame met MultiIndex-kolommen geven; plak naar vlak.
+    # yfinance can return a DataFrame with MultiIndex columns; flatten it.
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
     df = df.rename(columns={"Close": "close", "Open": "open", "High": "high",
                             "Low": "low", "Volume": "volume"})
     out = df[["open", "high", "low", "close", "volume"]]
-    # Oude/nieuwe yfinance geeft 'close' als Series of 1-kolom DF; forceer 1D.
+    # Old/new yfinance returns 'close' as a Series or 1-column DF; force 1D.
     if isinstance(out["close"], pd.DataFrame):
         out["close"] = out["close"].iloc[:, 0]
     return out
@@ -341,10 +341,10 @@ def load_prices(symbol: str, period: str = "2y", interval: str = "1d") -> pd.Dat
 def generate_synthetic_prices(
     n: int = 500, seed: int = 7, drift: float = 0.0004, vol: float = 0.015,
 ) -> pd.DataFrame:
-    """Maak realistische gesimuleerde koersen (inclusief een crash) — voor demo/tests."""
+    """Create realistic simulated prices (including a crash) — for demo/tests."""
     rng = np.random.default_rng(seed)
     rets = rng.normal(drift, vol, n)
-    # Voeg een crash toe (~dag 350) om crashweerstand te testen.
+    # Add a crash (~day 350) to test crash resilience.
     if n > 360:
         rets[350:365] -= 0.05
     prices = 100 * np.exp(np.cumsum(rets))

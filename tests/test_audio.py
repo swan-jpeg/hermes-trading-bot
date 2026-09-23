@@ -1,4 +1,4 @@
-"""Tests voor audio-analyse (T3)."""
+"""Tests for audio analysis (T3)."""
 from __future__ import annotations
 
 from hermes_bot.signals.audio import AudioAnalyzer
@@ -6,22 +6,22 @@ from hermes_bot.signals.audiovisual import SpeechSignal
 
 
 def test_audio_analyzer_basic() -> None:
-    """Test dat AudioAnalyzer werkt zonder fouten."""
+    """Test that AudioAnalyzer works without errors."""
     analyzer = AudioAnalyzer()
     
-    # Test met een niet-bestaand bestand
+    # Test with a non-existent file
     signal = analyzer.analyze("/non/existent/audio.wav")
     
-    # Moet een SpeechSignal teruggeven
+    # Must return a SpeechSignal
     assert isinstance(signal, SpeechSignal)
     assert signal.confidence == 0.0  # Neutrale output
 
 
 def test_audio_analyzer_structure() -> None:
-    """Test dat de structuur van SpeechSignal correct is."""
+    """Test that the SpeechSignal structure is correct."""
     analyzer = AudioAnalyzer()
     
-    # Test met een niet-bestaand bestand
+    # Test with a non-existent file
     signal = analyzer.analyze("/non/existent/audio.wav")
     
     # Controleer velden

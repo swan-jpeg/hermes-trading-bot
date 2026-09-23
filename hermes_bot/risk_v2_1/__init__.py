@@ -39,7 +39,7 @@ from hermes_bot.schemas import MonteCarloResult, RLRawDecision
 # RECOVERY ENGINE — expliciete toestandsmachine
 # ---------------------------------------------------------------------------
 class RecoveryEngine:
-    """Beheert de recovery-toestand: NORMAL -> ALERT -> DEFENSIVE ->
+    """Manages the recovery state: NORMAL -> ALERT -> DEFENSIVE ->
     STABILIZATION -> RECOVERY -> NORMAL.
 
     Recovery-signalen:
@@ -63,7 +63,7 @@ class RecoveryEngine:
         vol_baseline: float,
         recent_returns: list[float],
     ) -> str:
-        """Update de recovery-toestand o.b.v. alleen historische info."""
+        """Update the recovery state based only on historical info."""
         self.state_days += 1
         recovery_signal = float(np.mean(recent_returns[-self.recovery_lookback:])) \
             if len(recent_returns) >= self.recovery_lookback else 0.0
@@ -103,7 +103,7 @@ class RecoveryEngine:
 # EMERGENCY BRAKE — Layer C
 # ---------------------------------------------------------------------------
 class EmergencyBrake:
-    """Extreem snelle bescherming tegen extreme events.
+    """Extremely fast protection against extreme events.
 
     Triggers: extreme dag-return, extreme vol-jump, gap-down.
     Test drempels: -10%, -15%, -20%, -30% (configurable).
@@ -119,7 +119,7 @@ class EmergencyBrake:
         self.remaining_days = 0
 
     def check(self, daily_return: float, vol: float, vol_baseline: float) -> bool:
-        """Trigger de brake bij extreme events."""
+        """Trigger the brake on extreme events."""
         if daily_return <= self.extreme_return_threshold:
             self.active = True
             self.remaining_days = self.brake_days
@@ -131,7 +131,7 @@ class EmergencyBrake:
         return False
 
     def tick(self) -> float:
-        """Geef de exposure-multiplier voor vandaag; deactiveer na brake_days."""
+        """Return today's exposure multiplier; deactivate after brake_days."""
         if self.active:
             self.remaining_days -= 1
             if self.remaining_days <= 0:
@@ -145,7 +145,7 @@ class EmergencyBrake:
 # ---------------------------------------------------------------------------
 @dataclass
 class V21Breakdown:
-    """Volledige breakdown voor logging en reconstructie."""
+    """Full breakdown for logging and reconstruction."""
 
     risk_score: float
     opp_score: float
@@ -167,7 +167,7 @@ class V21Breakdown:
 
 
 class RiskEngineV21:
-    """Adaptieve risk-budgeting engine met twee-assige scores + 3 lagen."""
+    """Adaptive risk-budgeting engine with two-axis scores + 3 layers."""
 
     def __init__(self, config: dict) -> None:
         self.cfg = config.get("risk", {})
@@ -277,7 +277,7 @@ class RiskEngineV21:
         mc: MonteCarloResult | None = None,
         alpha_signals: dict | None = None,
     ) -> tuple[float, V21Breakdown]:
-        """Bereken de effectieve exposure met volledige breakdown."""
+        """Compute the effective exposure with a full breakdown."""
         if decision.action.value == "sell" and decision.exit_reason.value != "none":
             self.prev_exposure = 0.0
             return 0.0, V21Breakdown(
@@ -310,7 +310,7 @@ class RiskEngineV21:
                 self.hist_returns, vol, self.vol_baseline, drawdown, corr, alpha_signals
             )
 
-        # --- Risk budget uit twee assen ---
+        # --- Risk budget from two axes ---
         risk_budget = risk_budget_from_scores(risk_score, opp_score)
         state = state_label(risk_score, opp_score)
 

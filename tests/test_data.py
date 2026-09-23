@@ -1,4 +1,4 @@
-"""Tests voor de data-laag (T1)."""
+"""Tests for the data layer (T1)."""
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -8,9 +8,9 @@ from hermes_bot.data.storage import SQLiteStore
 
 
 def test_market_collector_idempotent(tmp_path) -> None:
-    """Test dat collect() idempotent is."""
+    """Test that collect() is idempotent."""
     # Mock yfinance.download om vaste df terug te geven
-    # We maken een DataFrame zoals yfinance dat retourneert
+    # We create a DataFrame like yfinance returns
     import pandas as pd
     
     mock_df = pd.DataFrame({
@@ -25,27 +25,27 @@ def test_market_collector_idempotent(tmp_path) -> None:
     with patch("yfinance.download") as mock_download:
         mock_download.return_value = mock_df
         
-        # Maak een collector en store
+        # Create a collector and store
         collector = MarketDataCollector(symbols=["AAPL"])
         store = SQLiteStore(tmp_path / "test.db")
         
-        # Collect 2x -> storage heeft geen duplicaten
+        # Collect 2x -> storage has no duplicates
         records1 = collector.collect()
         records2 = collector.collect()
         
-        # Controleer dat records correct zijn
+        # Check that the records are correct
         assert len(records1) == 2
         assert len(records2) == 2
         assert records1 == records2
         
-        # Controleer dat de records correct zijn opgeslagen
+        # Check that the records are stored correctly
         store.insert_many(records1)
         store.insert_many(records2)  # Deze moet idempotent zijn
         
-        # Controleer dat er maar 2 records zijn (geen duplicaten)
-        # We kunnen dit niet eenvoudig testen zonder SQL query, maar de insert_many 
-        # moet idempotent zijn door de PRIMARY KEY constraint in de database
-        # De test controleert vooral dat collect() geen fouten geeft en 2 records retourneert
+        # Check that there are only 2 records (no duplicates)
+        # We cannot easily test this without an SQL query, but insert_many 
+        # must be idempotent thanks to the PRIMARY KEY constraint in the database
+        # The test mainly checks that collect() does not error and returns 2 records
         assert len(records1) == 2
         assert records1[0]["symbol"] == "AAPL"
         assert records1[0]["open"] == 100.0
@@ -53,16 +53,16 @@ def test_market_collector_idempotent(tmp_path) -> None:
 
 
 def test_market_collector_empty_result() -> None:
-    """Test dat collect() geen fout geeft bij lege resultaten."""
+    """Test that collect() does not error on empty results."""
     # Mock yfinance.download om None te retourneren
     with patch("yfinance.download") as mock_download:
         mock_download.return_value = None
         
-        # Maak een collector
+        # Create a collector
         collector = MarketDataCollector(symbols=["AAPL"])
         
-        # Collect -> moet geen fout geven
+        # Collect -> must not error
         records = collector.collect()
         
-        # Moet leeg zijn
+        # Must be empty
         assert len(records) == 0

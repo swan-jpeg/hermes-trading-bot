@@ -1,4 +1,4 @@
-"""Unit tests voor Risk Engine v2.1 — twee-assige scores, lagen, recovery.
+"""Unit tests for Risk Engine v2.1 — two-axis scores, layers, recovery.
 
 Test: Risk Environment Score, Opportunity Score (onafhankelijk van risk),
 risk budget matrix, emergency brake, recovery engine, effectieve exposure.
@@ -32,7 +32,7 @@ def _decision() -> RLRawDecision:
 
 
 def test_risk_score_high_in_crash() -> None:
-    """Risk Environment Score is hoog bij diepe drawdown + hoge vol."""
+    """Risk Environment Score is high on deep drawdown + high vol."""
     s = RiskEnvironmentScore({"risk": {}})
     score = s.score(vol=0.30, vol_baseline=0.125, drawdown=-0.20, corr=0.7,
                     var_95=-0.08, crash_prob=0.4, extreme_return=-0.05)
@@ -40,7 +40,7 @@ def test_risk_score_high_in_crash() -> None:
 
 
 def test_risk_score_low_in_bull() -> None:
-    """Risk Environment Score is laag bij gezonde markt."""
+    """Risk Environment Score is low in a healthy market."""
     s = RiskEnvironmentScore({"risk": {}})
     score = s.score(vol=0.10, vol_baseline=0.125, drawdown=0.0, corr=0.1,
                     var_95=-0.01, crash_prob=0.0, extreme_return=0.0)
@@ -48,7 +48,7 @@ def test_risk_score_low_in_bull() -> None:
 
 
 def test_opportunity_not_inverse_risk() -> None:
-    """Opportunity is NIET (100 - risk): onafhankelijk berekend."""
+    """Opportunity is NOT (100 - risk): computed independently."""
     opp = OpportunityScore({"risk": {}})
     # Lage vol, positieve momentum -> hoge opportunity.
     returns = [0.003] * 20
@@ -59,8 +59,8 @@ def test_opportunity_not_inverse_risk() -> None:
     score_low, _ = opp.score(returns_bad, vol=0.30, vol_baseline=0.125,
                              drawdown=-0.10, corr=0.7)
     assert score_high > score_low, "opportunity moet hoger zijn bij goede condities"
-    # Opportunity is niet simpelweg inverse van risk: score_high is niet
-    # gelijk aan (100 - risk_score) voor dezelfde condities.
+    # Opportunity is not simply the inverse of risk: score_high is not
+    # equal to (100 - risk_score) for the same conditions.
     risk = RiskEnvironmentScore({"risk": {}})
     risk_high = risk.score(0.10, 0.125, 0.0, 0.1, -0.01, 0.0, 0.0)
     assert abs(score_high - (100 - risk_high)) > 5, "opportunity mag niet inverse risk zijn"
@@ -87,16 +87,16 @@ def test_state_labels() -> None:
 
 
 def test_emergency_brake_triggers() -> None:
-    """Emergency brake triggert bij extreme dag-return."""
+    """Emergency brake triggers on an extreme daily return."""
     b = EmergencyBrake({"risk": {"emergency_return_threshold": -0.10}})
     assert b.check(-0.15, 0.1, 0.1) is True
     assert b.active is True
-    # Exposure wordt 0 tijdens brake.
+    # Exposure becomes 0 during the brake.
     assert b.tick() == 0.0
 
 
 def test_emergency_brake_no_false_trigger() -> None:
-    """Emergency brake triggert NIET bij normale vol."""
+    """Emergency brake does NOT trigger on normal vol."""
     b = EmergencyBrake({"risk": {"emergency_return_threshold": -0.10}})
     assert b.check(-0.01, 0.1, 0.1) is False
     assert b.active is False
@@ -106,22 +106,22 @@ def test_emergency_brake_no_false_trigger() -> None:
 def test_recovery_state_machine() -> None:
     """Recovery engine doorloopt NORMAL -> ALERT -> DEFENSIVE -> STABILIZATION -> RECOVERY."""
     r = RecoveryEngine({"risk": {"stabilize_days": 2}})
-    # NORMAL -> ALERT bij stress.
+    # NORMAL -> ALERT on stress.
     assert r.update(-0.10, 0.3, 0.125, [0.0] * 10) == "ALERT"
-    # ALERT -> DEFENSIVE bij diepere stress.
+    # ALERT -> DEFENSIVE on deeper stress.
     assert r.update(-0.15, 0.4, 0.125, [-0.01] * 10) == "DEFENSIVE"
-    # DEFENSIVE -> STABILIZATION bij herstel.
+    # DEFENSIVE -> STABILIZATION on recovery.
     assert r.update(-0.03, 0.1, 0.125, [0.001] * 10) == "STABILIZATION"
     # STABILIZATION dag 1 (state_days < stabilize_days) -> blijft STABILIZATION.
     assert r.update(-0.02, 0.1, 0.125, [0.002] * 10) == "STABILIZATION"
     # STABILIZATION dag 2 (state_days >= stabilize_days) + positief -> RECOVERY.
     assert r.update(-0.02, 0.1, 0.125, [0.002] * 10) == "RECOVERY"
-    # RECOVERY -> NORMAL bij trend-herstel.
+    # RECOVERY -> NORMAL on trend recovery.
     assert r.update(-0.01, 0.1, 0.125, [0.003] * 10) == "NORMAL"
 
 
 def test_v21_reduces_exposure_in_crash() -> None:
-    """v2.1 verlaagt exposure bij diepe drawdown (adaptief)."""
+    """v2.1 lowers exposure on deep drawdown (adaptive)."""
     e = _engine()
     e.peak_equity = 100.0
     # Realistische crash-returns: hoge vol + negatief.
@@ -134,7 +134,7 @@ def test_v21_reduces_exposure_in_crash() -> None:
 
 
 def test_v21_high_exposure_in_bull() -> None:
-    """v2.1 heeft hoge exposure in gezonde bull (lage risk, hoge opp)."""
+    """v2.1 has high exposure in a healthy bull (low risk, high opp)."""
     e = _engine()
     e.peak_equity = 100.0
     rng = np.random.default_rng(3)

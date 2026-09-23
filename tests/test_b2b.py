@@ -1,4 +1,4 @@
-"""Tests voor B2B-bottleneck + regionale scores (T8)."""
+"""Tests for B2B bottleneck + regional scores (T8)."""
 from __future__ import annotations
 
 from hermes_bot.expansions import BottleneckAnalyzer, RegionalScorer
@@ -27,7 +27,7 @@ def test_regional_scorer_score() -> None:
 
 
 def test_bottleneck_analyzer_basic() -> None:
-    """Test dat BottleneckAnalyzer werkt zonder fouten."""
+    """Test that BottleneckAnalyzer works without errors."""
     analyzer = BottleneckAnalyzer()
     
     # Test basic functionality
@@ -39,7 +39,7 @@ def test_bottleneck_analyzer_basic() -> None:
 
 
 def test_regional_scorer_basic() -> None:
-    """Test dat RegionalScorer werkt zonder fouten."""
+    """Test that RegionalScorer works without errors."""
     scorer = RegionalScorer()
     
     # Test basic functionality

@@ -45,7 +45,7 @@ def detect_regime(
     recovery_signal: float,
     prev_regime: str,
 ) -> str:
-    """Bepaal het regime o.b.v. alleen nu-beschikbare informatie.
+    """Determine the regime based only on currently available information.
 
     Regimes: normal, elevated, stressed, crash, recovery.
     - crash: drawdown < -15% OF crash_prob > 0.30
@@ -70,7 +70,7 @@ def detect_regime(
 # ---------------------------------------------------------------------------
 @dataclass
 class MultiplierBreakdown:
-    """Alle multipliers + final exposure — voor logging en reconstructie."""
+    """All multipliers + final exposure — for logging and reconstruction."""
 
     base_exposure: float
     vol_multiplier: float
@@ -90,7 +90,7 @@ class MultiplierBreakdown:
 
 
 class RiskEngineV2:
-    """Adaptieve risico-engine met transparante multipliers."""
+    """Adaptive risk engine with transparent multipliers."""
 
     def __init__(self, config: dict) -> None:
         self.cfg = config.get("risk", {})
@@ -123,7 +123,7 @@ class RiskEngineV2:
         # Recovery.
         self.recovery_lookback = self.cfg.get("recovery_lookback", 10)
 
-        # Ablation-toggles (voor experiment B): zet een multiplier uit.
+        # Ablation toggles (for experiment B): disable a multiplier.
         self._vol_off = self.cfg.get("_vol_off", False)
         self._dd_off = self.cfg.get("_dd_off", False)
         self._corr_off = self.cfg.get("_corr_off", False)
@@ -139,9 +139,9 @@ class RiskEngineV2:
         self.hist_returns: list[float] = []
         self.hist_prices: list[float] = []
 
-    # --- Drawdown (echt, geen look-ahead) ---
+    # --- Drawdown (real, no look-ahead) ---
     def update_drawdown(self, equity: float) -> float:
-        """Update peak equity en bereken drawdown. Alleen historische info."""
+        """Update peak equity and compute drawdown. Historical info only."""
         if equity > self.peak_equity:
             self.peak_equity = equity
         if self.peak_equity <= 0:
@@ -159,7 +159,7 @@ class RiskEngineV2:
 
     # --- Correlatie (alleen historische returns) ---
     def _correlation(self) -> float:
-        """Autocorrelatie van returns als proxy voor markt-correlatie.
+        """Autocorrelation of returns as a proxy for market correlation.
 
         In een single-asset test is er geen cross-asset correlatie; we gebruiken
         de autocorrelatie (momentum/mean-reversion) als proxy. In multi-asset
@@ -175,7 +175,7 @@ class RiskEngineV2:
 
     # --- Recovery-signaal ---
     def _recovery_signal(self) -> float:
-        """Positief als recente returns gemiddeld positief zijn (trend herstel)."""
+        """Positive if recent returns are on average positive (trend recovery)."""
         if len(self.hist_returns) < self.recovery_lookback:
             return 0.0
         recent = np.asarray(self.hist_returns[-self.recovery_lookback :])
@@ -190,7 +190,7 @@ class RiskEngineV2:
     def _drawdown_multiplier(self, drawdown: float) -> float:
         if self._dd_off or drawdown >= 0:
             return 1.0
-        # Hoe dieper de drawdown, hoe lager de exposure.
+        # The deeper the drawdown, the lower the exposure.
         # ratio = drawdown / max_drawdown (0..1+). ratio=0 -> 1.0, ratio>=1 -> 0.1.
         ratio = drawdown / self.max_drawdown
         return float(np.clip(1.0 - 0.9 * ratio, 0.1, 1.0))
@@ -240,7 +240,7 @@ class RiskEngineV2:
         equity: float,
         mc: MonteCarloResult | None = None,
     ) -> tuple[float, MultiplierBreakdown]:
-        """Bereken de goedgekeurde exposure met volledige multiplier-breakdown."""
+        """Compute the approved exposure with a full multiplier breakdown."""
         if decision.action.value == "sell" and decision.exit_reason.value != "none":
             self.prev_exposure = 0.0
             return 0.0, MultiplierBreakdown(
@@ -261,7 +261,7 @@ class RiskEngineV2:
 
         vol_baseline = max(0.05, self.vol_target)
 
-        # Regime met hysteresis (min hold-tijd).
+        # Regime with hysteresis (min hold time).
         regime = detect_regime(drawdown, vol, vol_baseline, crash_prob, recovery,
                                self.prev_regime)
         if regime == self.prev_regime:
@@ -311,7 +311,7 @@ class RiskEngineV2:
         )
 
     def record_return(self, ret: float) -> None:
-        """Registreer een dagrendement voor vol/corr/recovery-berekening."""
+        """Record a daily return for vol/corr/recovery calculation."""
         self.hist_returns.append(ret)
         if len(self.hist_returns) > 500:
             self.hist_returns = self.hist_returns[-500:]

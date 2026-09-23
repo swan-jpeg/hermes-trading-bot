@@ -17,7 +17,7 @@ class PortfolioState:
     cash: float = 0.0
     positions: dict[str, Position] = field(default_factory=dict)  # entity -> positie
     regime: str = "unknown"
-    # Hoogste prijs sinds entry per entity (voor trailing stop).
+    # Highest price since entry per entity (for trailing stop).
     peaks: dict[str, float] = field(default_factory=dict)
 
     def total_exposure(self) -> float:
@@ -30,23 +30,23 @@ class PortfolioState:
         return pos.unrealized_pnl_pct(current_price)
 
     def peak_for(self, entity: str, current_price: float) -> float:
-        """Bijgewerkt hoogtepunt sinds entry (voor trailing stop)."""
+        """Updated high since entry (for trailing stop)."""
         return max(self.peaks.get(entity, current_price), current_price)
 
     @property
     def drawdown(self) -> float:
-        # TODO: uit historie/equity-curve. Bewust 0.0 zolang er geen hist is.
+        # TODO: from history/equity curve. Deliberately 0.0 while there is no history.
         return 0.0
 
 
 class PortfolioAllocator:
-    """Strategische + tactische toewijzing over assetklassen."""
+    """Strategic + tactical allocation across asset classes."""
 
     def __init__(self, config: dict) -> None:
         self.cfg = config
 
     def propose_target(self, decisions: list, state: PortfolioState) -> dict[str, float]:
-        """Combineer goedgekeurde allocaties tot portfolio-targets.
+        """Combine approved allocations into portfolio targets.
 
         - BUY  -> verhoog gewicht met intent_to_alloc.
         - SELL -> verlaag gewicht (of sluit als intent <= -huidig gewicht).
@@ -65,7 +65,7 @@ class PortfolioAllocator:
         return target
 
     def rebalance(self, current: PortfolioState, target: dict[str, float]) -> list[dict]:
-        """Return lijst van gewenste nettowoorderingen (input voor executie)."""
+        """Return the list of desired net changes (input for execution)."""
         delta: list[dict] = []
         for asset, tw in target.items():
             cw = current.positions.get(asset).qty if current.positions.get(asset) else 0.0

@@ -1,4 +1,4 @@
-"""Tests voor backtest-framework (T5)."""
+"""Tests for the backtest framework (T5)."""
 from __future__ import annotations
 
 import pandas as pd
@@ -18,7 +18,7 @@ def _prices(close: list[float]) -> pd.DataFrame:
 
 
 def test_backtester_basic() -> None:
-    """Test dat de backtester werkt zonder fouten."""
+    """Test that the backtester works without errors."""
     prices = _prices([100.0, 102.0, 101.0, 103.0, 104.0, 105.0, 106.0, 107.0, 108.0, 110.0])
     result = Backtester().run(prices, BuyAndHoldStrategy())
     assert isinstance(result, BacktestResult)
@@ -27,7 +27,7 @@ def test_backtester_basic() -> None:
 
 
 def test_vol_target_never_fails() -> None:
-    """Test dat de vol-target strategie draait en resultaat levert."""
+    """Test that the vol-target strategy runs and produces a result."""
     prices = _prices([100.0, 102.0, 99.0, 103.0, 105.0, 108.0, 106.0, 110.0, 112.0, 115.0])
     result = Backtester().run(prices, VolTargetStrategy({"entity": "asset"}))
     assert isinstance(result, BacktestResult)
