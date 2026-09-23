@@ -149,7 +149,10 @@ class ImpactAgent:
         """Zet de impact-analyse om naar fusion-inputs per beïnvloede entiteit.
 
         Elke beïnvloede entiteit krijgt een eigen fusion-input, zodat het
-        fusion-model + RL-model per instrument kunnen beslissen.
+        fusion-model + RL-model per instrument kunnen beslissen. Wanneer de
+        entiteit een eigen LLM-gegenereerd sentiment heeft (bv. NVDA +0.8 van
+        de impact-agent), gebruiken we DAT per-instrument sentiment in plaats
+        van het globale fallback-sentiment.
         """
         if not result.impacted:
             return []
@@ -158,9 +161,9 @@ class ImpactAgent:
                 "source": "impact",
                 "entity_id": item["entity"],
                 "asset_class": item["asset_class"],
-                "sentiment": round(sentiment, 4),
+                "sentiment": round(float(item.get("sentiment", sentiment)), 4),
                 "confidence": result.confidence,
-                "reason": item["reason"],
+                "reason": item.get("reason", ""),
             }
             for item in result.impacted
         ]

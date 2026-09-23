@@ -58,3 +58,23 @@ def test_deduplicates_entities() -> None:
     r = agent.analyze("AI chips and electric vehicle batteries", source="report")
     entities = [i["entity"] for i in r.impacted]
     assert len(entities) == len(set(entities))  # no duplicates
+
+
+def test_to_fusion_inputs_keeps_per_entity_llm_sentiment() -> None:
+    """The LLM's per-instrument sentiment (e.g. NVDA +0.8) must survive."""
+    from hermes_bot.impact import LLMImpactAgent
+    agent = LLMImpactAgent()
+    # Keyword-match only -> no LLM call (no key), so we simulate a surplus
+    # result where one entity carries its own sentiment (as the LLM fills in).
+    r = agent.analyze("AI chip demand rising", source="report")
+    # Give one entity a specific sentiment, like the LLM does.
+    for item in r.impacted:
+        if item["entity"] == "NVDA":
+            item["sentiment"] = 0.8
+    inputs = agent.to_fusion_inputs(r, sentiment=0.5)  # global fallback 0.5
+    nvda = [i for i in inputs if i["entity_id"] == "NVDA"]
+    assert nvda and nvda[0]["sentiment"] == 0.8, "NVDA per-entity sentiment verloren"
+    # Andere (zonder eigen sentiment) krijgen de global 0.5.
+    other = [i for i in inputs if i["entity_id"] != "NVDA"]
+    if other:
+        assert all(i["sentiment"] == 0.5 for i in other)

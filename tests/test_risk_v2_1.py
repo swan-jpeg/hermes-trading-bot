@@ -144,3 +144,37 @@ def test_v21_high_exposure_in_bull() -> None:
     exp, bd = e.approve(_decision(), pf, equity=100.0)
     assert exp > 0.5, f"exposure moet hoog zijn in bull, kreeg {exp}"
     assert bd.opp_score > 50
+
+
+def test_regime_alpha_lowers_exposure_in_crash() -> None:
+    """regime_sentiment (risico-input) verlaagt de exposure bij crash."""
+
+    def exp_for(regime_sent: float) -> float:
+        e = _engine()
+        e.peak_equity = 100.0
+        rng = np.random.default_rng(2)
+        e.hist_returns = list(rng.normal(0.0005, 0.006, 40))
+        e.prev_exposure = 0.5
+        pf = PortfolioState(cash=100000)
+        # Loop door zodat _smooth zijn clamp kan oplossen.
+        for i in range(5):
+            exp, bd = e.approve(_decision(), pf, 100000 * (1 + 0.001 * i),
+                                alpha_signals={"regime_sentiment": regime_sent,
+                                               "regional_score": 0.5})
+        return exp
+
+    crash_exp = exp_for(-0.8)
+    bull_exp = exp_for(0.5)
+    assert crash_exp < bull_exp, f"crash exposure {crash_exp} moet < bull {bull_exp} zijn"
+
+
+def test_regional_score_adds_opportunity() -> None:
+    """regional_score als alpha-signaal verhoogt de opp-score monotoon."""
+    opp = OpportunityScore({"risk": {}})
+    returns = [0.002] * 20
+    lo, bd_lo = opp.score(returns, vol=0.10, vol_baseline=0.125, drawdown=0.0,
+                          corr=0.1, alpha_signals={"regional_score": 0.1})
+    hi, bd_hi = opp.score(returns, vol=0.10, vol_baseline=0.125, drawdown=0.0,
+                          corr=0.1, alpha_signals={"regional_score": 0.9})
+    assert hi > lo, "hogere regionale score moet meer opportunity geven"
+    assert "regional_score" in bd_hi["alpha_signals"]

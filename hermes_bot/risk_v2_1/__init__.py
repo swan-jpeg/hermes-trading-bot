@@ -328,9 +328,17 @@ class RiskEngineV21:
         tactical_mult = self._tactical_multiplier(vol_accel, drawdown)
         recovery_mult = self._recovery_multiplier(recovery_state)
 
+        # Regime/orderflow is een risico-input: monotoon effect op exposure.
+        # bull=+0.5 -> verhoog (0..+20%), crash=-0.8 -> verlaag sterk.
+        regime_mult = 1.0
+        if alpha_signals:
+            rs = float(alpha_signals.get("regime_sentiment", 0.0))
+            regime_mult = float(np.clip(1.0 + rs * 0.4, 0.4, 1.2))
+
         desired = self.base_exposure
         effective = desired * risk_budget
-        effective *= strategic_mult * tactical_mult * recovery_mult * emergency_mult
+        effective *= strategic_mult * tactical_mult * recovery_mult
+        effective *= regime_mult * emergency_mult
         effective = self._smooth(effective)
 
         reasons = []
@@ -344,6 +352,8 @@ class RiskEngineV21:
             reasons.append(f"recovery={recovery_state}")
         reason = ", ".join(reasons) if reasons else "normal"
 
+        if alpha_signals:
+            opp_breakdown["regime_multiplier"] = round(regime_mult, 4)
         self.prev_exposure = effective
         return effective, V21Breakdown(
             risk_score=round(risk_score, 1), opp_score=round(opp_score, 1),

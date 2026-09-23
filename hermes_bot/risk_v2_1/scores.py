@@ -150,16 +150,21 @@ class OpportunityScore:
         elif corr < 0.6:
             corr_comp = 50.0
 
-        # Alpha signals (interfaces, neutral if unavailable).
+        # Alpha signals (interfaces, neutral if unavailable). De deler is het
+        # aantal keys, zodat de alpha-component nooit over 100 gaat en elke
+        # gevulde signaal eerlijk telt.
+        alpha_keys = [
+            "prediction_confidence", "model_agreement", "fundamental_quality",
+            "valuation", "bottleneck_score", "news_signal",
+            "regime_sentiment", "regional_score",
+        ]
         alpha_comp = 0.0
         alpha_breakdown = {}
-        for key in ["prediction_confidence", "model_agreement", "fundamental_quality",
-                    "valuation", "bottleneck_score", "news_signal",
-                    "regime_sentiment", "regional_score"]:
+        for key in alpha_keys:
             if key in alpha_signals:
-                v = float(alpha_signals[key])
-                alpha_comp += float(np.clip(v, 0, 1)) * 100 / 6.0
-                alpha_breakdown[key] = round(v, 3)
+                v = float(np.clip(float(alpha_signals[key]), 0, 1))
+                alpha_comp += v * 100 / len(alpha_keys)
+                alpha_breakdown[key] = round(float(alpha_signals[key]), 3)
             else:
                 alpha_breakdown[key] = "unavailable"
 
