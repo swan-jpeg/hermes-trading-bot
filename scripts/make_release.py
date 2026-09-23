@@ -148,14 +148,25 @@ def _upload_asset(release_id: str, token: str, path: pathlib.Path) -> None:
         print(f"  ✓ geüpload: {d.get('name')} ({len(data)//1024} KB)")
 
 
-def _update_readme(version: str, core_name: str, full_name: str) -> None:
+def _amsterdam_now() -> str:
+    """Current date/time in Europe/Amsterdam (CET/CEST), e.g. 2026-09-23 12:34."""
+    from datetime import UTC, datetime
+    from zoneinfo import ZoneInfo
+
+    return datetime.now(UTC).astimezone(ZoneInfo("Europe/Amsterdam")).strftime("%Y-%m-%d %H:%M")
+
+
+def _update_readme(version: str, core_name: str, full_name: str,
+                   changelog: str = "") -> None:
     """Update the README version table (add a new row at the top)."""
     readme = ROOT / "README.md"
     text = readme.read_text()
+    stamp = _amsterdam_now()
     row = (f"| {version} | [core](https://github.com/swan-jpeg/hermes-trading-bot/"
            f"releases/download/{version}/{core_name}) | "
            f"[full](https://github.com/swan-jpeg/hermes-trading-bot/"
-           f"releases/download/{version}/{full_name}) |")
+           f"releases/download/{version}/{full_name}) | "
+           f"{changelog or '—'} | {stamp} |")
     marker = "<!-- RELEASES -->"
     if marker in text:
         # Replace the table: new row right after the separator (before the marker).
@@ -177,8 +188,8 @@ def _update_readme(version: str, core_name: str, full_name: str) -> None:
             f"## Releases\n\n"
             f"Download the latest version below. Each release keeps its own "
             f"downloads — old versions are never removed.\n\n"
-            f"| Version | Core (risk engine) | Full (everything) |\n"
-            f"| --- | --- | --- |\n"
+            f"| Version | Core (risk engine) | Full (everything) | Changes | Posted (Amsterdam) |\n"
+            f"| --- | --- | --- | --- | --- |\n"
             f"{row}\n\n"
             f"<!-- RELEASES -->\n\n"
         )
@@ -190,6 +201,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Maak een GitHub Release met artefacten")
     ap.add_argument("--version", default=None, help="versie-tag (default: volgende)")
     ap.add_argument("--dry-run", action="store_true", help="alleen zips bouwen, geen release")
+    ap.add_argument("--changelog", default="", help="wat er veranderd is in deze release")
     args = ap.parse_args()
 
     version = args.version or _next_version()
@@ -219,12 +231,17 @@ def main() -> int:
     req.add_header("Authorization", f"Bearer {token}")
     req.add_header("Accept", "application/vnd.github+json")
     req.add_header("Content-Type", "application/json")
+    stamp = _amsterdam_now()
+    body = (f"**Posted:** {stamp} (Amsterdam)\n\n"
+            f"Download **core** (alleen de risk engine + kern, klein) of "
+            f"**full** (het hele project incl. heavy-model extras).\n\n")
+    if args.changelog:
+        body += f"**Changes:** {args.changelog}\n\n"
+    body += "Zie de README voor installatie-instructies."
     req.data = json.dumps({
         "tag_name": version,
         "name": f"Hermes Trading Bot {version}",
-        "body": ("Download **core** (alleen de risk engine + kern, klein) of "
-                 "**full** (het hele project incl. heavy-model extras).\n\n"
-                 "Zie de README voor installatie-instructies."),
+        "body": body,
         "draft": False,
         "prerelease": False,
     }).encode()
@@ -247,7 +264,7 @@ def main() -> int:
     _upload_asset(release_id, token, full_path)
 
     # Update the README and commit.
-    _update_readme(version, core_name, full_name)
+    _update_readme(version, core_name, full_name, args.changelog)
     _git("add", "README.md")
     _git("-c", "user.email=bot@local", "-c", "user.name=bot",
          "commit", "-m", f"Release {version}: README download-tabel bijwerken")
