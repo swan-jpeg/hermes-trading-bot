@@ -332,17 +332,15 @@ ARCH_SVG = """<svg id="arch" viewBox="0 0 1000 860" style="width:100%;height:aut
   <path class="arch-edge data" d="{e_scrape_speech}" marker-end="url(#arrowData)"/>
   <path class="arch-edge data" d="{e_scrape_reports}" marker-end="url(#arrowData)"/>
   <path class="arch-edge data" d="{e_scrape_alerts}" marker-end="url(#arrowData)"/>
-  <!-- signals -> fusion (extensions INTEGRATED) -->
-  <path class="arch-edge" d="{e_speech_fusion}" marker-end="url(#arrow)"/>
-  <path class="arch-edge" d="{e_reports_fusion}" marker-end="url(#arrow)"/>
-  <path class="arch-edge ghost" d="{e_alerts_fusion}" marker-end="url(#arrow)"/>
-  <path class="arch-edge" d="{e_bottleneck_fusion}" marker-end="url(#arrow)"/>
-  <path class="arch-edge" d="{e_regional_fusion}" marker-end="url(#arrow)"/>
-  <path class="arch-edge" d="{e_regime_fusion}" marker-end="url(#arrow)"/>
-  <!-- signalen -> impact-agent -> fusion -->
+  <!-- signals -> impact-agent (koppelt gebeurtenis aan beïnvloede instrumenten) -->
   <path class="arch-edge" d="{e_speech_impact}" marker-end="url(#arrow)"/>
   <path class="arch-edge" d="{e_reports_impact}" marker-end="url(#arrow)"/>
   <path class="arch-edge" d="{e_alerts_impact}" marker-end="url(#arrow)"/>
+  <!-- extensions -> fusion -->
+  <path class="arch-edge" d="{e_bottleneck_fusion}" marker-end="url(#arrow)"/>
+  <path class="arch-edge" d="{e_regional_fusion}" marker-end="url(#arrow)"/>
+  <path class="arch-edge" d="{e_regime_fusion}" marker-end="url(#arrow)"/>
+  <!-- impact -> fusion (per beïnvloede entiteit) -->
   <path class="arch-edge" d="{e_impact_fusion}" marker-end="url(#arrow)"/>
   <!-- fusion -> rl -->
   <path class="arch-edge" d="{e_fusion_rl}" marker-end="url(#arrow)"/>
@@ -605,17 +603,14 @@ def _architecture_html() -> str:
     e["e_scrape_speech"] = _edge(560, 91, 175, 195, 0.5, 0.5)
     e["e_scrape_reports"] = _edge(610, 91, 385, 195, 0.5, 0.45)
     e["e_scrape_alerts"] = _edge(655, 91, 605, 195, 0.5, 0.5)
-    # signalen -> fusion (fusion-top ~ y=375)
-    e["e_speech_fusion"] = _edge(175, 249, 480, 375, 0.5, 0.4)
-    e["e_reports_fusion"] = _edge(385, 249, 500, 375, 0.5, 0.4)
-    e["e_alerts_fusion"] = _edge(605, 249, 520, 375, 0.5, 0.45)
-    e["e_bottleneck_fusion"] = _edge(815, 249, 550, 375, 0.5, 0.5)
-    e["e_regional_fusion"] = _edge(175, 320, 500, 375, 0.5, 0.4)
-    e["e_regime_fusion"] = _edge(605, 320, 520, 375, 0.5, 0.45)
     # signalen -> impact-agent (koppelt gebeurtenis aan beïnvloede instrumenten)
     e["e_speech_impact"] = _edge(175, 249, 300, 320, 0.5, 0.4)
     e["e_reports_impact"] = _edge(385, 249, 390, 320, 0.5, 0.4)
     e["e_alerts_impact"] = _edge(605, 249, 480, 320, 0.5, 0.45)
+    # extensions -> fusion (bottleneck/regional/regime gaan direct naar fusion)
+    e["e_bottleneck_fusion"] = _edge(815, 249, 550, 375, 0.5, 0.5)
+    e["e_regional_fusion"] = _edge(175, 320, 500, 375, 0.5, 0.4)
+    e["e_regime_fusion"] = _edge(605, 320, 520, 375, 0.5, 0.45)
     # impact -> fusion (per beïnvloede entiteit)
     e["e_impact_fusion"] = _edge(390, 370, 480, 375, 0.5, 0.4)
     # fusion -> rl

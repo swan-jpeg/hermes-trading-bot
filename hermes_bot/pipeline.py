@@ -27,7 +27,7 @@ from hermes_bot.expansions import (
     RegionalScorer,
 )
 from hermes_bot.fusion import WeightedFusion
-from hermes_bot.impact import ImpactAgent
+from hermes_bot.impact import ImpactAgent, LLMImpactAgent
 from hermes_bot.portfolio import PortfolioState
 from hermes_bot.risk_v2.montecarlo import MonteCarloEngineV2
 from hermes_bot.risk_v2_1 import RiskEngineV21
@@ -159,7 +159,12 @@ class Pipeline:
         self.risk = RiskEngineV21(config or {})
         self.mc = MonteCarloEngineV2(seed=self.cfg.get("seed", 42), n_paths=1000)
         self.bottleneck_analyzer = BottleneckAnalyzer()
-        self.impact_agent = ImpactAgent()
+        # Impact-agent: keyword-matching, of met LLM-interpretatie als config dat vraagt.
+        if self.cfg.get("impact_use_llm"):
+            self.impact_agent = LLMImpactAgent(
+                model=self.cfg.get("impact_llm_model", "meta-llama/llama-3.1-8b-instruct:free"))
+        else:
+            self.impact_agent = ImpactAgent()
         self.portfolio = PortfolioState(cash=100_000.0)
 
     def run(

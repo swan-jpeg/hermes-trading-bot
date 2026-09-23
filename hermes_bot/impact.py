@@ -160,5 +160,106 @@ class ImpactAgent:
 
 
 def build_impact_agent(config: dict | None = None) -> ImpactAgent:
-    """Factory: bouw de impact-agent (uitbreidbaar via config)."""
+    """Factory: bouw de impact-agent (keyword-matching + optionele LLM)."""
+    cfg = config or {}
+    if cfg.get("use_llm"):
+        return LLMImpactAgent(
+            model=cfg.get("llm_model", "meta-llama/llama-3.1-8b-instruct:free"))
     return ImpactAgent()
+
+
+class LLMImpactAgent(ImpactAgent):
+    """Impact Agent met optionele LLM-interpretatie.
+
+    Gebruikt een gratis AI-model (via API-key uit .env, NIET in GitHub) om de
+    gebeurtenis te interpreteren en beïnvloede instrumenten te bepalen. Dit
+    vangt gevallen die keyword-matching mist, bv.:
+
+        "Trump zegt dat Jensen Huang een goede gozer is en je hem kan vertrouwen"
+        -> LLM begrijpt: dit is positief voor NVIDIA (NVDA).
+
+    De API-key komt uit de omgeving (IMPACT_LLM_API_KEY / OPENROUTER_API_KEY),
+    nooit uit code. Zonder key valt het terug op de keyword-matching.
+    """
+
+    def __init__(self, sector_map: dict | None = None,
+                 api_key: str | None = None,
+                 model: str = "meta-llama/llama-3.1-8b-instruct:free") -> None:
+        super().__init__(sector_map)
+        self.api_key = api_key
+        self.model = model
+
+    def _get_key(self) -> str | None:
+        if self.api_key:
+            return self.api_key
+        import os
+        return os.environ.get("IMPACT_LLM_API_KEY") or os.environ.get("OPENROUTER_API_KEY")
+
+    def analyze(self, event: str, source: str = "news",
+                entity_id: str = "") -> ImpactResult:
+        """Bepaal beïnvloede instrumenten, met LLM-interpretatie als beschikbaar."""
+        # Eerst de snelle keyword-matching (altijd).
+        base = super().analyze(event, source, entity_id)
+        key = self._get_key()
+        if not key or not event.strip():
+            return base
+        # LLM-interpretatie: vraag het model welke instrumenten geraakt worden.
+        try:
+            llm_impact = self._llm_interpret(event, source, key)
+            if llm_impact:
+                # Combineer: LLM-resultaat + keyword-matching (dedupliceer).
+                combined = {i["entity"]: i for i in base.impacted}
+                for item in llm_impact:
+                    combined[item["entity"]] = item
+                base.impacted = list(combined.values())
+                base.confidence = round(max(base.confidence, 0.7), 4)
+        except Exception:  # noqa: BLE001
+            pass  # fallback naar keyword-matching
+        return base
+
+    def _llm_interpret(self, event: str, source: str, key: str) -> list[dict]:
+        """Vraag het gratis LLM welke instrumenten door de gebeurtenis geraakt worden."""
+        import json
+        import urllib.error
+        import urllib.request
+
+        prompt = (
+            "Je bent een financieel impact-analist. Bepaal welke beursgenoteerde "
+            "instrumenten (tickers) geraakt worden door deze gebeurtenis, en of de "
+            "impact positief of negatief is. Antwoord ALLEEN met JSON:\n"
+            '[{"entity": "NVDA", "asset_class": "stock", "sentiment": 0.8, "reason": "..."}]\n'
+            f"Gebeurtenis ({source}): {event}"
+        )
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": (
+                    "Je bent een financieel impact-analist. Antwoord alleen met geldige JSON.")},
+                {"role": "user", "content": prompt},
+            ],
+            "max_tokens": 300,
+            "temperature": 0.1,
+        }
+        req = urllib.request.Request(
+            "https://openrouter.ai/api/v1/chat/completions", method="POST")
+        req.add_header("Authorization", f"Bearer {key}")
+        req.add_header("Content-Type", "application/json")
+        req.data = json.dumps(payload).encode()
+        with urllib.request.urlopen(req, timeout=30) as r:
+            d = json.loads(r.read())
+        content = d["choices"][0]["message"]["content"].strip()
+        # Haal de JSON-array eruit (het model kan er tekst omheen zetten).
+        start = content.find("[")
+        end = content.rfind("]")
+        if start == -1 or end == -1:
+            return []
+        items = json.loads(content[start:end + 1])
+        out = []
+        for it in items:
+            out.append({
+                "entity": str(it.get("entity", "")).upper(),
+                "asset_class": it.get("asset_class", "stock"),
+                "sentiment": float(it.get("sentiment", 0.0)),
+                "reason": it.get("reason", "llm"),
+            })
+        return [i for i in out if i["entity"]]
