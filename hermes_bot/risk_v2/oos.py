@@ -442,7 +442,7 @@ def integrity_checks() -> dict:
     checks = {}
     # 1. Config immutable: hash klopt.
     checks["config_hash"] = config_hash()
-    # 2. Geen look-ahead: engine gebruikt alleen historische returns (structureel).
+    # 2. No look-ahead: the engine uses only historical returns (structural).
     checks["look_ahead_bias"] = "PASS — engine gebruikt alleen historische returns (structureel)"
     # 3. Warm-up: test data not used for init (warm-up is before the test).
     checks["warmup_before_test"] = "PASS — warm-up (2022-2023) is vóór test (2024-2026)"

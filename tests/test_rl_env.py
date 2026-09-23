@@ -9,7 +9,7 @@ from hermes_bot.rl.env import TradingEnv
 def test_trading_env_creation() -> None:
     """Test that TradingEnv is created correctly."""
     # For now we only test whether the class can be imported and created
-    # De echte implementatie vereist meer complexe mocking
+    # The real implementation requires more complex mocking
     
     # Test aanmaken (dummy)
     try:

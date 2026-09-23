@@ -604,7 +604,7 @@ def _architecture_html() -> str:
     e["e_action_exec"] = _edge(440, 765, 560, 765, 0.5, 0.5)
 
     # Build the SVG by replacing only the real placeholders (not .format,
-    # want de SVG bevat CSS-braces die .format zou proberen in te vullen).
+    # because the SVG contains CSS braces that .format would try to fill).
     repl = {
         "n_server": n_server, "n_scrape": n_scrape,
         "n_speech": n_speech, "n_reports": n_reports, "n_alerts": n_alerts,
@@ -616,7 +616,7 @@ def _architecture_html() -> str:
     out = ARCH_SVG
     for token, val in repl.items():
         out = out.replace("{" + token + "}", str(val))
-    # Modal met uitleg per component (klikbaar).
+    # Modal with per-component explanation (clickable).
     import json as _json
     modal = _arch_modal_html().replace(
         "__ARCH_INFO__", _json.dumps(COMPONENT_INFO, ensure_ascii=False)
@@ -675,7 +675,7 @@ function htmlEscape(s){ return s.replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;',
 
 
 def _backtest_result_html(data: dict) -> str:
-    """Render het backtest-resultaat met KPI-kaarten + SVG-lijndiagram."""
+    """Render the backtest result with KPI cards + SVG line chart."""
     def pct(x: float) -> str:
         return f"{x*100:+.1f}%"
 
@@ -684,7 +684,7 @@ def _backtest_result_html(data: dict) -> str:
     dd = data["max_drawdown"]
     tr_kpi = "good" if tr > 0 else "bad"
 
-    # Beperkte dip: benchmark met crashes relatief dieper.
+    # Limited dip: benchmark with crashes relatively deeper.
     equities = data["equity"]
     benchs = data["benchmark"]
     ts = data["timestamps"]
@@ -1084,7 +1084,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:  # noqa: BLE001
                 self._send(f"Fout bij zip: {html.escape(str(e))}")
         elif path == "/raw_backtest":
-            # Datareturn voor AJAX zonder pagina-shell
+            # Data return for AJAX without a page shell
             try:
                 from hermes_bot.backtest.runner import run_backtest
                 data = run_backtest(

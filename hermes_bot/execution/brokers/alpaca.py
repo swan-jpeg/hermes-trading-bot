@@ -26,7 +26,7 @@ class AlpacaBroker(BaseBroker):
 
         Fail-closed: als broker niet beschikbaar is, wordt de order geweigerd.
         """
-        # Voor T7: offline-safe implementatie
+        # For T7: offline-safe implementation
         # In a real implementation we would call the Alpaca API here
         
         if not self.health():
@@ -36,16 +36,16 @@ class AlpacaBroker(BaseBroker):
         
         # For now a dummy implementation
         # In a real implementation we would here:
-        # 1. De Alpaca API verbinden
-        # 2. De order plaatsen
-        # 3. De response verwerken
+        # 1. Connect to the Alpaca API
+        # 2. Place the order
+        # 3. Process the response
         
         order.status = "submitted"
         return order
 
     def get_positions(self) -> dict[str, float]:
         """Fetch current positions via the Alpaca API."""
-        # Voor T7: offline-safe implementatie
+        # For T7: offline-safe implementation
         # In a real implementation we would call the Alpaca API here
         
         if not self.health():
@@ -53,15 +53,15 @@ class AlpacaBroker(BaseBroker):
         
         # For now a dummy implementation
         # In a real implementation we would here:
-        # 1. De Alpaca API verbinden
-        # 2. De posities ophalen
-        # 3. De resultaten verwerken
+        # 1. Connect to the Alpaca API
+        # 2. Fetch the positions
+        # 3. Process the results
         
         return {"AAPL": 10.0, "MSFT": 5.0}  # Dummy data
 
     def health(self) -> bool:
         """Check whether the broker is available."""
-        # Voor T7: offline-safe implementatie
+        # For T7: offline-safe implementation
         # In a real implementation we would here:
         # 1. Connect to the Alpaca API
         # 2. Status controleren
@@ -71,7 +71,7 @@ class AlpacaBroker(BaseBroker):
         # In a real implementation this would be a real API call
         try:
             # Simulate that we can reach the API
-            # Voor nu altijd beschikbaar
+            # Always available for now
             self._connected = True
             return True
         except Exception:

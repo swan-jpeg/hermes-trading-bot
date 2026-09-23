@@ -92,7 +92,7 @@ class TradingEnv(gym.Env):
         # 7: VaR95 (portfolio) -1..0
         # 8: crash-kans 0..1
         
-        # Voor nu dummy waarden
+        # Dummy values for now
         return np.array([
             0.5,  # sentiment
             0.8,  # zekerheid

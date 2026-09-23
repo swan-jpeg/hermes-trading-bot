@@ -119,7 +119,7 @@ class VolTargetStrategy(Strategy):
         action = "hold"
         exit_reason = ExitReason.NONE
 
-        # Laat RulePolicy prijs-exits (take-profit/stop/trailing) toepassen.
+        # Let RulePolicy apply price exits (take-profit/stop/trailing).
         if portfolio.positions.get(entity) is not None:
             pos = portfolio.positions[entity]
             peak = portfolio.peak_for(entity, price)

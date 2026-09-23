@@ -24,7 +24,7 @@ from hermes_bot.simulation import MonteCarloEngine
 
 def run_demo() -> dict:
     """Simulate a decision cycle with an existing position + Monte Carlo."""
-    # 0. Een bestaande open positie (entry 100, nu 118 -> +18%, boven take-profit 15%).
+    # 0. An existing open position (entry 100, now 118 -> +18%, above take-profit 15%).
     pos = Position(
         entity="AAPL",
         qty=100.0,

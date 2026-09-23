@@ -1,4 +1,4 @@
-"""LAAG 1-2: datacollectie + opslag. Zie obsidian [[02-Data-Laag]]."""
+"""LAYER 1-2: data collection + storage. See obsidian [[02-Data-Laag]]."""
 from __future__ import annotations
 
 from dataclasses import dataclass

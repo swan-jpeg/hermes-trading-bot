@@ -307,7 +307,7 @@ def check_leakage(prices: pd.DataFrame, log: list[RiskLogEntry]) -> dict:
     """Check for look-ahead / future information in the decisions."""
     findings = []
     # MC uses only daily_returns up to and including the PREVIOUS day (no look-ahead).
-    # Controleer dat var_95 pas verschijnt na dag 30 (warm-up).
+    # Check that var_95 only appears after day 30 (warm-up).
     first_mc = next((e for e in log if e.var_95 != 0.0), None)
     if first_mc is not None:
         # MC is only computed once len(daily_returns)>=30 -> day 30+.

@@ -1,4 +1,4 @@
-"""De geïntegreerde architectuur-pipeline.
+"""The integrated architecture pipeline.
 
 Dit is de daadwerkelijke integratie van ALLE lagen in één orchestrator.
 De zogenaamde "uitbreidingen" (bottleneck, regime, regionale scores, orderflow)
