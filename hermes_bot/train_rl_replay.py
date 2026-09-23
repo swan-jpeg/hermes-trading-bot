@@ -12,7 +12,8 @@ Run on your Windows PC (8GB VRAM / 16GB RAM is plenty — PPO is tiny):
 To use an AMD Radeon GPU on Windows, install PyTorch DirectML first:
 
     uv pip install torch-directml
-    uv run python -m hermes_bot.train_rl_replay --device dml --ticker SPY --years 5 --timesteps 200000
+    uv run python -m hermes_bot.train_rl_replay --device dml --ticker SPY
+        --years 5 --timesteps 200000
 
 The trained model is saved to `models/rl_ppo_replay_<ticker>.zip`. Load it later with
 `RLFusionModel(policy=TrainedPolicy(model))` — the policy interface is unchanged,
@@ -31,10 +32,10 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from hermes_bot.portfolio import PortfolioState
+from hermes_bot.replay.simulator import ReplaySimulator
 from hermes_bot.rl import RulePolicy
 from hermes_bot.rl.context import AssetContext
 from hermes_bot.rl.env import TradingEnv
-from hermes_bot.replay.simulator import ReplaySimulator
 
 if TYPE_CHECKING:
     from stable_baselines3 import PPO
@@ -256,7 +257,7 @@ def train_phase_2(model: PPO, ticker: str, seed: int = 42, device="cpu") -> PPO:
     
     # Prepare training data from replay contexts
     all_contexts = []
-    for date, contexts in contexts_by_date.items():
+    for _date, contexts in contexts_by_date.items():
         all_contexts.extend(contexts)
     
     print(f"Generated {len(all_contexts)} contexts from replay data.")
@@ -293,7 +294,8 @@ def main() -> int:
     args = ap.parse_args()
 
     # Phase 1: Synthetic training
-    model_phase1 = train_phase_1(args.ticker, args.years, args.timesteps // 2, args.seed, args.device)
+    model_phase1 = train_phase_1(args.ticker, args.years,
+                                 args.timesteps // 2, args.seed, args.device)
     
     # Phase 2: Fine-tune on real replay data
     model_phase2 = train_phase_2(model_phase1, args.ticker, args.seed, args.device)

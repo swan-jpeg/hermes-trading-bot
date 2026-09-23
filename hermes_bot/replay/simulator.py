@@ -9,6 +9,7 @@ import logging
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+
 import numpy as np
 
 from hermes_bot.impact import LLMImpactAgent
@@ -90,7 +91,8 @@ class ReplaySimulator:
                 )
                 self.events_by_date[event.date].append(event)
                 
-        logger.info(f"Fetched {sum(len(events) for events in self.events_by_date.values())} events across {len(self.events_by_date)} days")
+        total = sum(len(ev) for ev in self.events_by_date.values())
+        logger.info(f"Fetched {total} events across {len(self.events_by_date)} days")
     
     def load_prices_for_date_range(self, ticker: str) -> None:
         """
@@ -104,7 +106,8 @@ class ReplaySimulator:
             import yfinance as yf
             
             # Download price data for the date range
-            df = yf.download(ticker, start=self.start_date, end=self.end_date, progress=False, auto_adjust=True)
+            df = yf.download(ticker, start=self.start_date, end=self.end_date,
+                             progress=False, auto_adjust=True)
             prices = df["Close"].values
             
             # Remove any NaN values
@@ -116,7 +119,8 @@ class ReplaySimulator:
             logger.info(f"Fetched {len(self.prices[ticker])} price points for {ticker}")
         except Exception as e:
             # Fallback to simulated prices if yfinance fails
-            logger.warning(f"Failed to fetch real prices for {ticker}: {e}. Using simulated prices.")
+            logger.warning(f"Failed to fetch real prices for {ticker}: {e}. "
+                           "Using simulated prices.")
             # Simulate some prices as a fallback
             self.prices[ticker] = [100.0] * 252  # Default to constant price
             logger.info(f"Simulated {len(self.prices[ticker])} price points for {ticker}")
@@ -159,16 +163,8 @@ class ReplaySimulator:
         if ticker not in self.prices:
             self.load_prices_for_date_range(ticker)
         
-        prices = self.prices.get(ticker, [100.0] * 252)
-        # Instead of calling build_fusion_signals, we'll create mock signals
-        # In a real implementation, this would be the actual fusion model output
-        signals = [
-            {
-                "sentiment": 0.0,  # Neutral sentiment for now
-                "zekerheid": 0.5,  # Medium certainty
-                "kwaliteit": 0.5   # Medium quality
-            }
-        ] * len(prices)  # Create signals for each price point
+        # In a real implementation, the fusion model output would be used here.
+        # For now the AssetContexts carry the market interpretation directly.
         
         # Process each event through the impact agent
         all_asset_contexts = []
@@ -249,7 +245,8 @@ class ReplaySimulator:
         Returns:
             Dictionary mapping dates to lists of AssetContext objects.
         """
-        logger.info(f"Starting replay simulation for {ticker} from {self.start_date} to {self.end_date}")
+        logger.info(f"Starting replay simulation for {ticker} from "
+                     f"{self.start_date} to {self.end_date}")
         
         # Process all days in the date range
         all_contexts = {}
@@ -270,7 +267,8 @@ class ReplaySimulator:
             # Move to next day
             current_date += timedelta(days=1)
         
-        logger.info(f"Replay simulation completed. Generated contexts for {len(all_contexts)} days.")
+        logger.info(f"Replay simulation completed. Generated contexts "
+                     f"for {len(all_contexts)} days.")
         return all_contexts
 
 
@@ -300,7 +298,8 @@ if __name__ == "__main__":
         for date, ctx_list in list(contexts.items())[:3]:  # Show first 3 days
             print(f"  {date}: {len(ctx_list)} contexts")
             for i, ctx in enumerate(ctx_list[:2]):  # Show first 2 contexts per day
-                print(f"    Context {i+1}: entity={ctx.entity}, impact_dir={ctx.impact_direction:.2f}")
+                print(f"    Context {i+1}: entity={ctx.entity}, "
+                      f"impact_dir={ctx.impact_direction:.2f}")
         
         print("Replay simulation completed successfully!")
         

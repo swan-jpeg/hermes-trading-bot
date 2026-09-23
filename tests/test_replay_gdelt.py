@@ -2,9 +2,10 @@
 Tests for the GDELT replay module.
 """
 
-import unittest
-from unittest.mock import patch, MagicMock
 import json
+import unittest
+from unittest.mock import MagicMock, patch
+
 from hermes_bot.replay.gdelt import fetch_events
 
 
