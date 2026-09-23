@@ -172,9 +172,9 @@ def _update_readme(version: str, core_name: str, full_name: str,
         # Replace the table: new row right after the separator (before the marker).
         lines = text.splitlines()
         idx = next(i for i, ln in enumerate(lines) if marker in ln)
-        # Find the separator before the marker (the table header).
+        # Find the separator (the table header) anywhere before the marker.
         insert_at = None
-        for i in range(idx - 1, max(0, idx - 6), -1):
+        for i in range(idx - 1, -1, -1):
             if lines[i].startswith("| ---"):
                 insert_at = i + 1
                 break
