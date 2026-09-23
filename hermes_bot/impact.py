@@ -19,6 +19,7 @@ worden door een speech of rapport. Deze agent levert die koppeling.
 """
 from __future__ import annotations
 
+import pathlib
 from dataclasses import dataclass, field
 
 # Sector/onderwerp -> beïnvloede instrumenten (tickers + assetklasse).
@@ -184,16 +185,22 @@ class LLMImpactAgent(ImpactAgent):
 
     def __init__(self, sector_map: dict | None = None,
                  api_key: str | None = None,
-                 model: str = "meta-llama/llama-3.1-8b-instruct:free") -> None:
+                 model: str = "meta-llama/llama-3.1-8b-instruct:free",
+                 base_url: str = "https://openrouter.ai/api/v1") -> None:
         super().__init__(sector_map)
         self.api_key = api_key
         self.model = model
+        self.base_url = base_url
 
     def _get_key(self) -> str | None:
         if self.api_key:
             return self.api_key
         import os
         return os.environ.get("IMPACT_LLM_API_KEY") or os.environ.get("OPENROUTER_API_KEY")
+
+    def _get_base_url(self) -> str:
+        import os
+        return os.environ.get("IMPACT_LLM_BASE_URL") or self.base_url
 
     def analyze(self, event: str, source: str = "news",
                 entity_id: str = "") -> ImpactResult:
@@ -218,30 +225,34 @@ class LLMImpactAgent(ImpactAgent):
         return base
 
     def _llm_interpret(self, event: str, source: str, key: str) -> list[dict]:
-        """Vraag het gratis LLM welke instrumenten door de gebeurtenis geraakt worden."""
+        """Vraag het LLM (via de skill) welke instrumenten geraakt worden."""
         import json
         import urllib.error
         import urllib.request
 
-        prompt = (
-            "Je bent een financieel impact-analist. Bepaal welke beursgenoteerde "
-            "instrumenten (tickers) geraakt worden door deze gebeurtenis, en of de "
-            "impact positief of negatief is. Antwoord ALLEEN met JSON:\n"
-            '[{"entity": "NVDA", "asset_class": "stock", "sentiment": 0.8, "reason": "..."}]\n'
-            f"Gebeurtenis ({source}): {event}"
-        )
+        # Laad de impact-agent skill als system-prompt (indien aanwezig).
+        skill_path = (pathlib.Path(__file__).resolve().parent.parent
+                      / "impact_agent" / "skill" / "impact-agent-skill.md")
+        system_prompt = "Je bent een financieel impact-analist. Antwoord alleen met geldige JSON."
+        try:
+            if skill_path.exists():
+                system_prompt = skill_path.read_text()
+        except OSError:
+            pass
+
+        prompt = f"Gebeurtenis ({source}): {event}"
         payload = {
             "model": self.model,
             "messages": [
-                {"role": "system", "content": (
-                    "Je bent een financieel impact-analist. Antwoord alleen met geldige JSON.")},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt},
             ],
             "max_tokens": 300,
             "temperature": 0.1,
         }
+        base = self._get_base_url().rstrip("/")
         req = urllib.request.Request(
-            "https://openrouter.ai/api/v1/chat/completions", method="POST")
+            f"{base}/chat/completions", method="POST")
         req.add_header("Authorization", f"Bearer {key}")
         req.add_header("Content-Type", "application/json")
         req.data = json.dumps(payload).encode()

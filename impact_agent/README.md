@@ -1,103 +1,92 @@
-# Impact Agent — LLM-training & integratie
+# Impact Agent — Skill voor je eigen LLM
 
-Deze map bevat alles om de **Impact Agent** te trainen en te integreren: een
-gratis AI-model dat gebeurtenissen interpreteert en bepaalt welke instrumenten
-(stocks, obligaties, ETF's) geraakt worden.
+Dit is een **skill** die je op je eigen LLM (bv. Qwen3-27B, Llama-3.1, of elk
+groot model) kunt zetten, zodat die als **Impact Agent** functioneert: een
+tussenlaag die gebeurtenissen interpreteert en bepaalt welke instrumenten
+(stocks, obligaties, ETF's) geraakt worden — en met welk sentiment.
 
 ## Wat de Impact Agent doet
 
-De Impact Agent is de schakel die een gebeurtenis koppelt aan beïnvloede
+De Impact Agent is de schakel tussen een gebeurtenis en de beïnvloede
 instrumenten. Voorbeeld:
 
 > "Trump zegt dat Jensen Huang een goede gozer is en je hem kan vertrouwen"
 >
-> → De agent begrijpt: dit is **positief voor NVIDIA (NVDA)**.
+> → De agent begrijpt: dit is **positief voor NVIDIA (NVDA)**, sentiment +0.8.
 
 Zonder deze agent weet het RL-model niet welke stocks geraakt worden door een
-speech of rapport. De agent levert die koppeling.
+speech of rapport. De agent levert die koppeling als een **vector** per
+instrument.
 
 ## Hoe het werkt
 
 ```
 Gebeurtenis (speech/rapport/overheidsuitgave/nieuws)
         ↓
-IMPACT-AGENT  ← bepaalt: "dit raakt NVDA, TSLA, AGG"
+IMPACT-AGENT (jouw LLM met deze skill)
         ↓
-per beïnvloede entiteit: fusion-input (sentiment/zekerheid/kwaliteit)
+per beïnvloede entiteit: vector
+  {entity, asset_class, sentiment, confidence, reason}
         ↓
 RL-model (per entiteit: welk instrument + gewicht + zekerheid)
         ↓
 risk engine + Monte Carlo → portfolio → executie
 ```
 
-## Twee modi
+## De skill (prompt) — zet dit op je LLM
 
-### 1. Keyword-matching (altijd, geen API-key nodig)
-`ImpactAgent` in `hermes_bot/impact.py` matcht keywords/sectoren en koppelt die
-aan beïnvloede tickers. Snel, gratis, offline. Werkt altijd.
+Kopieer de inhoud van `skill/impact-agent-skill.md` naar je LLM (als
+system-prompt, of als skill in je agent-framework). De LLM krijgt dan de rol
+van impact-analist en antwoordt in gestructureerd JSON.
 
-### 2. LLM-interpretatie (optioneel, gratis model)
-`LLMImpactAgent` gebruikt een gratis AI-model (via OpenRouter) om de **context**
-van de gebeurtenis te begrijpen — vangt gevallen die keyword-matching mist
-(bv. "Trump prijst Jensen Huang" → NVDA).
+## Installatie
 
-## Installatie & integratie
+### Optie A — Gebruik je eigen LLM als impact agent (aanbevolen)
+1. Zet de skill (`skill/impact-agent-skill.md`) op je LLM (Qwen3-27B, etc.).
+2. Configureer de bot om je LLM te gebruiken als impact agent:
+   - Zet in `.env`:
+     ```
+     IMPACT_LLM_API_KEY=<jouw key>
+     IMPACT_LLM_MODEL=<jouw model, bv. qwen/qwen3-27b>
+     IMPACT_LLM_BASE_URL=<jouw endpoint>
+     ```
+   - Zet in `config/config.yaml`:
+     ```yaml
+     impact_use_llm: true
+     ```
+3. De bot stuurt elke gebeurtenis naar je LLM (met de skill als system-prompt)
+   en krijgt de beïnvloede instrumenten terug.
 
-### Stap 1 — API-key (gratis)
-1. Maak een gratis account op https://openrouter.ai
-2. Genereer een API-key (Settings → Keys)
-3. Zet de key in `.env` (NIET in GitHub):
-   ```
-   IMPACT_LLM_API_KEY=sk-or-...
-   IMPACT_LLM_MODEL=meta-llama/llama-3.1-8b-instruct:free
-   ```
+### Optie B — Keyword-matching (geen LLM nodig)
+`ImpactAgent` in `hermes_bot/impact.py` matcht keywords/sectoren. Snel,
+gratis, offline. Werkt altijd als fallback.
 
-### Stap 2 — Activeer de LLM in config
-In `config/config.yaml`:
-```yaml
-impact_use_llm: true
-impact_llm_model: meta-llama/llama-3.1-8b-instruct:free
+## De output-vector
+
+Elke beïnvloede entiteit krijgt een vector:
+```json
+{
+  "entity": "NVDA",
+  "asset_class": "stock",
+  "sentiment": 0.8,
+  "confidence": 0.7,
+  "reason": "Trump prijst Jensen Huang (positief voor AI-chips)"
+}
 ```
 
-### Stap 3 — Test
-```bash
-uv run python -c "
-from hermes_bot.impact import LLMImpactAgent
-agent = LLMImpactAgent()
-r = agent.analyze('Trump says Jensen Huang is a good guy, you can trust him',
-                  source='speech', entity_id='trump')
-print([i['entity'] for i in r.impacted])
-"
-```
-
-## Het model trainen/verfijnen (optioneel)
-
-De gratis OpenRouter-modellen werken direct zonder training. Wil je een
-**eigen** impact-model trainen (bv. op jouw historische gebeurtenissen), dan:
-
-1. Verzamel data: `data/events.jsonl` met `{event, source, impacted_tickers, sentiment}`
-2. Gebruik een fine-tuning-API (OpenRouter / Nous) op een open model
-   (bv. Llama-3.1-8B).
-3. Vervang `IMPACT_LLM_MODEL` door je getrainde model-id.
-
-Zie `scripts/finetune_impact.py` voor een startpunt.
-
-## Skills & MCP (voor de coder consultant)
-
-De coder consultant kan deze skills/MCP gebruiken om de impact-agent te
-verbeteren:
-
-- **context7 MCP** — up-to-date docs voor LLM-API's (OpenRouter, Nous).
-- **trading-bot-architecture skill** — de architectuurregels (impact-agent
-  moet per-entiteit fusion-inputs leveren, RL stelt voor / Risk beslist).
+Dit is de input voor het RL-model: het ziet per stock het sentiment, de
+zekerheid en de kwaliteit, en beslist of het koopt/houdt/verkoopt.
 
 ## Bestanden
 
 ```
 impact_agent/
-├── README.md              ← dit bestand
-├── data/                  ← trainingsdata (events.jsonl)
-├── scripts/
-│   └── finetune_impact.py ← startpunt voor fine-tuning
-└── config.example.yaml    ← voorbeeld-config
+├── README.md                    ← dit bestand
+├── skill/
+│   └── impact-agent-skill.md    ← de skill (prompt) voor je eigen LLM
+├── config.example.yaml          ← voorbeeld-config
+├── data/
+│   └── events.jsonl             ← voorbeeld-trainingsdata
+└── scripts/
+    └── finetune_impact.py       ← startpunt voor fine-tuning
 ```
