@@ -48,6 +48,8 @@ class PipelineResult:
     risk_budget: float = 0.0
     effective_exposure: float = 0.0
     decision: dict = field(default_factory=dict)
+    decisions: list[dict] = field(default_factory=list)  # per-entiteit RL/risk-output
+    exposures: list[float] = field(default_factory=list)
     asset_contexts: list[dict] = field(default_factory=list)  # per-entiteit RL-input
 
 
@@ -256,7 +258,9 @@ class Pipeline:
             asset_contexts.append(ctx)
 
         # 4. Risk engine (v2.1) with the v2.1 config.
-        decision_sent = fused.emotie.get("sentiment", 0.0)
+        #    Each affected entity gets its OWN decision + risk approval, so
+        #    multiple impact-agent outputs run separately through the RL/risk
+        #    chain (e.g. EU AI plan -> MLST, ASML, STM each evaluated alone).
         equity = self.portfolio.cash + 0.0  # cash-only start
         mc = None
         if hasattr(self.risk, "hist_returns") and len(self.risk.hist_returns) >= 30:
@@ -264,12 +268,6 @@ class Pipeline:
             mc = self.mc.simulate(np.asarray(self.risk.hist_returns[-60:]), horizon=20)
 
         from hermes_bot.schemas import Action, ExitReason, RLRawDecision
-        decision = RLRawDecision(
-            entity=entity_id, action=Action.BUY,
-            intent_to_alloc=1.0 if decision_sent >= 0 else 0.0,
-            zekerheid=fused.zekerheid, rationale="pipeline-integrated",
-            timestamp=datetime.now(UTC), exit_reason=ExitReason.NONE,
-        )
         # Risk inputs: regional scores + regime/orderflow (not fusion inputs).
         regional_dict = regional_input.get("regional_scores", {})
         regional_avg = 0.0
@@ -280,8 +278,30 @@ class Pipeline:
             "regime": regime_input.get("regime", "unknown"),
             "regime_sentiment": regime_input.get("sentiment", 0.0),
         }
-        exposure, breakdown = self.risk.approve(
-            decision, self.portfolio, equity, mc, alpha_signals=alpha_signals)
+
+        decisions: list[dict] = []
+        exposures: list[float] = []
+        # If the impact agent found entities, decide per entity; else one
+        # market-level decision.
+        entities = [c.entity for c in asset_contexts] or [entity_id]
+        for ent in entities:
+            ent_ctx = next((c for c in asset_contexts if c.entity == ent), None)
+            ent_sent = ((ent_ctx.market_sentiment - 0.5) * 2.0 if ent_ctx
+                        else fused.emotie.get("sentiment", 0.0))
+            ent_conf = ent_ctx.sentiment_confidence if ent_ctx else fused.zekerheid
+            decision = RLRawDecision(
+                entity=ent, action=Action.BUY,
+                intent_to_alloc=1.0 if ent_sent >= 0 else 0.0,
+                zekerheid=ent_conf, rationale="pipeline-integrated",
+                timestamp=datetime.now(UTC), exit_reason=ExitReason.NONE,
+            )
+            exposure, breakdown = self.risk.approve(
+                decision, self.portfolio, equity, mc, alpha_signals=alpha_signals)
+            decisions.append(decision.model_dump())
+            exposures.append(round(exposure, 4))
+        # Primary decision = the first (or market-level) one for the result.
+        decision = RLRawDecision(**decisions[0]) if decisions else None
+        exposure = exposures[0] if exposures else 0.0
 
         # 5. Return bottleneck ratings (for logging/attribution).
         ratings = {
@@ -298,7 +318,9 @@ class Pipeline:
             impacted=impacted,
             risk_budget=round(breakdown.risk_budget, 4),
             effective_exposure=round(exposure, 4),
-            decision=decision.model_dump(),
+            decision=decision.model_dump() if decision else {},
+            decisions=decisions,
+            exposures=exposures,
             asset_contexts=[c.to_dict() for c in asset_contexts],
         )
 

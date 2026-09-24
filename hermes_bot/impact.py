@@ -192,7 +192,7 @@ class ImpactAgent:
                 "entity_id": item["entity"],
                 "asset_class": item["asset_class"],
                 "sentiment": round(float(item.get("sentiment", sentiment)), 4),
-                "confidence": result.confidence,
+                "confidence": round(float(item.get("confidence", result.confidence)), 4),
                 "reason": item.get("reason", ""),
             }
             for item in result.impacted
@@ -283,9 +283,13 @@ class LLMImpactAgent(ImpactAgent):
 
         prompt = (
             f"Event ({source}): {event}\n\n"
-            "Reply with a JSON object:\n"
+            "Reply with a JSON object. List EVERY affected instrument, each "
+            "with its OWN sentiment (-1..+1) and confidence (0..1). Respect "
+            "the region: if the event names a country/region, include that "
+            "region's companies first (e.g. EU AI investment -> MLST, ASML, "
+            "STM), then global names that also benefit.\n"
             '{"impact": [{"entity": "NVDA", "asset_class": "stock", '
-            '"sentiment": 0.8, "reason": "..."}], '
+            '"sentiment": 0.8, "confidence": 0.7, "reason": "..."}], '
             '"meta": {"direction": 0.8, "magnitude": 0.7, "probability": 0.6, '
             '"duration": 0.5, "directness": 0.9, "novelty": 0.4, "surprise": 0.3}}'
         )
@@ -295,18 +299,37 @@ class LLMImpactAgent(ImpactAgent):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt},
             ],
-            "max_tokens": 400,
+            "max_tokens": 4000,
             "temperature": 0.1,
         }
+        import time
         base = self._get_base_url().rstrip("/")
         req = urllib.request.Request(
             f"{base}/chat/completions", method="POST")
         req.add_header("Authorization", f"Bearer {key}")
         req.add_header("Content-Type", "application/json")
         req.data = json.dumps(payload).encode()
-        with urllib.request.urlopen(req, timeout=30) as r:
-            d = json.loads(r.read())
-        content = d["choices"][0]["message"]["content"].strip()
+        # Retry on rate-limit (429) and transient errors, with backoff.
+        d = {}
+        last_err: Exception | None = None
+        for attempt in range(3):
+            try:
+                with urllib.request.urlopen(req, timeout=120) as r:
+                    d = json.loads(r.read())
+                break
+            except urllib.error.HTTPError as e:
+                if e.code == 429:
+                    last_err = e
+                    time.sleep(3 * (attempt + 1))
+                    continue
+                raise
+            except (urllib.error.URLError, OSError, TimeoutError) as e:
+                last_err = e
+                time.sleep(2 * (attempt + 1))
+        if not d and last_err:
+            raise last_err
+        msg = d["choices"][0]["message"]
+        content = (msg.get("content") or msg.get("reasoning") or "").strip()
         # Extract the JSON object from it (the model can put text around it).
         start = content.find("{")
         end = content.rfind("}")
@@ -324,6 +347,7 @@ class LLMImpactAgent(ImpactAgent):
                 "entity": str(it.get("entity", "")).upper(),
                 "asset_class": it.get("asset_class", "stock"),
                 "sentiment": float(it.get("sentiment", 0.0)),
+                "confidence": float(it.get("confidence", 0.0)),
                 "reason": it.get("reason", "llm"),
             })
         return [i for i in out if i["entity"]], meta
