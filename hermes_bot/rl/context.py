@@ -1,30 +1,36 @@
-"""AssetContext — de rijke input-vector voor het RL-model.
+"""AssetContext — the rich input vector for the RL model.
 
-De gebruiker specificeerde 6 categorieën van mogelijke inputs. Niet alles is
-even nuttig of haalbaar; hier is de gekozen subset per categorie, met een
-duidelijke reden. Alles is genormaliseerd naar 0..1 (behalve waar anders
-aangegeven), zodat het RL-model (PPO) een stabiele, schaalbare observatie
-krijgt.
+The user specified 6 categories of possible inputs. Not everything is equally
+useful or feasible; here is the chosen subset per category, with a clear
+reason. Everything is normalized to 0..1 (except where noted), so the RL
+model (PPO) gets a stable, scalable observation.
 
-Categorie 1 — Impact Agent (kern): direction, magnitude, confidence,
+Category 1 — Impact Agent (core): direction, magnitude, confidence,
     probability, duration, directness, novelty, surprise.
-Categorie 2 — Informatiebron: quality, reliability, confidence,
+Category 2 — Information source: quality, reliability, confidence,
     completeness, cross-source confirmation, freshness, novelty.
-Categorie 3 — Type/inhoud (relevance): company, industry, macro,
+Category 3 — Type/content (relevance): company, industry, macro,
     geopolitical, regulatory, technological, supply-chain, demand,
     fundamental.
-Categorie 4 — Marktinterpretatie: sentiment, sentiment-confidence,
+Category 4 — Market interpretation: sentiment, sentiment-confidence,
     expectation, expectation-surprise, narrative-strength, attention,
     consensus, contrarian.
-Categorie 5 — B2B Bottleneck: demand-growth, supply-scarcity,
+Category 5 — B2B Bottleneck: demand-growth, supply-scarcity,
     supplier-concentration, bottleneck-strength, pricing-power,
     capacity-constraint, substitutability, barrier-to-entry, confidence.
-Categorie 6 — Tijd: information-age, impact-decay, expected-duration,
+Category 6 — Time: information-age, impact-decay, expected-duration,
     event-proximity, signal-persistence.
+Category 7 — Asset/Business profile: asset-class (one-hot) + sector type,
+    region and size class. This lets the model distinguish companies by
+    KIND (stock vs bond, tech vs energy, US vs EU, small vs mega) without
+    needing a fixed ticker — it generalizes to any entity the impact agent
+    points at.
 
-Deze module is de "taal" tussen de upstream-lagen (impact/fusion/bottleneck/
-webscraping) en het RL-model. Elke laag vult de velden die hij kent; de rest
-blijft op een neutrale default (0.5 of 0.0) zodat de vector altijd volledig is.
+This module is the "language" between the upstream layers (impact/fusion/
+bottleneck/webscraping) and the RL model. Each layer fills the fields it
+knows; the rest stays at a neutral default (0.5 or 0.0) so the vector is
+always complete.
+
 """
 from __future__ import annotations
 
@@ -32,35 +38,132 @@ from dataclasses import dataclass
 
 import numpy as np
 
+# Key -> profile. Fields are 0..1 and fill category 7. Unknown
+# tickers get a neutral profile (asset-class is ALWAYS set)
+# from the impact agent; the rest default neutral 0.5/0.0)
+#   indexgroep  asset-keywords      sectortype      region      size     volatility
+ASSET_PROFILES: dict[str, dict] = {
+    # --- Semiconductors / tech hardware ---
+    "NVDA": {"sector_tech": 1.0, "region_us": 1.0, "size_class": 1.0, "volatility": 1.0,
+             "min_supply_chain": 1.0},
+    "AMD":  {"sector_tech": 1.0, "region_us": 1.0, "size_class": 1.0, "volatility": 1.0,
+             "min_supply_chain": 1.0},
+    "INTC": {"sector_tech": 1.0, "region_us": 1.0, "size_class": 1.0, "volatility": 0.7,
+             "min_supply_chain": 1.0},
+    "TSM":  {"sector_tech": 1.0, "region_asia": 1.0, "size_class": 1.0, "volatility": 0.8,
+             "min_supply_chain": 1.0},
+    "AVGO": {"sector_tech": 1.0, "region_us": 1.0, "size_class": 1.0, "volatility": 0.7,
+             "min_supply_chain": 0.7},
+    # --- Software / big tech ---
+    "MSFT": {"sector_tech": 1.0, "region_us": 1.0, "size_class": 1.0, "volatility": 0.4,
+             "min_supply_chain": 0.0},
+    "AAPL": {"sector_tech": 1.0, "region_us": 1.0, "size_class": 1.0, "volatility": 0.5,
+             "min_supply_chain": 0.8},
+    "GOOGL": {"sector_tech": 1.0, "region_us": 1.0, "size_class": 1.0, "volatility": 0.5,
+              "min_supply_chain": 0.3},
+    "META": {"sector_tech": 1.0, "region_us": 1.0, "size_class": 1.0, "volatility": 0.7,
+             "min_supply_chain": 0.2},
+    "XLK":  {"sector_tech": 1.0, "region_us": 1.0, "size_class": 0.9, "volatility": 0.5,
+             "min_supply_chain": 0.3},
+    # --- Consumer / retail ---
+    "AMZN": {"sector_consumer": 1.0, "region_us": 1.0, "size_class": 1.0, "volatility": 0.6,
+             "min_supply_chain": 0.8},
+    "WMT":  {"sector_consumer": 1.0, "region_us": 1.0, "size_class": 1.0, "volatility": 0.3,
+             "min_supply_chain": 0.8},
+    "COST": {"sector_consumer": 1.0, "region_us": 1.0, "size_class": 1.0, "volatility": 0.3,
+             "min_supply_chain": 0.7},
+    "XLY":  {"sector_consumer": 1.0, "region_us": 1.0, "size_class": 0.9, "volatility": 0.5,
+             "min_supply_chain": 0.5},
+    # --- Healthcare / pharma ---
+    "JNJ":  {"sector_healthcare": 1.0, "region_us": 1.0, "size_class": 1.0, "volatility": 0.2,
+             "min_supply_chain": 0.3},
+    "PFE":  {"sector_healthcare": 1.0, "region_us": 1.0, "size_class": 1.0, "volatility": 0.4,
+             "min_supply_chain": 0.4},
+    "UNH":  {"sector_healthcare": 1.0, "region_us": 1.0, "size_class": 1.0, "volatility": 0.3,
+             "min_supply_chain": 0.1},
+    "XLV":  {"sector_healthcare": 1.0, "region_us": 1.0, "size_class": 0.9, "volatility": 0.3,
+             "min_supply_chain": 0.2},
+    # --- Financials ---
+    "JPM":  {"sector_financial": 1.0, "region_us": 1.0, "size_class": 1.0, "volatility": 0.5,
+             "min_supply_chain": 0.0},
+    "BAC":  {"sector_financial": 1.0, "region_us": 1.0, "size_class": 1.0, "volatility": 0.6,
+             "min_supply_chain": 0.0},
+    "GS":   {"sector_financial": 1.0, "region_us": 1.0, "size_class": 1.0, "volatility": 0.6,
+             "min_supply_chain": 0.0},
+    "XLF":  {"sector_financial": 1.0, "region_us": 1.0, "size_class": 0.9, "volatility": 0.5,
+             "min_supply_chain": 0.0},
+    # --- Energy / power / utilities ---
+    "XLE":  {"sector_energy": 1.0, "region_us": 1.0, "size_class": 0.85, "volatility": 0.6,
+             "min_supply_chain": 0.5},
+    "NEE":  {"sector_energy": 1.0, "region_us": 1.0, "size_class": 0.8, "volatility": 0.3,
+             "min_supply_chain": 0.3},
+    "DUK":  {"sector_energy": 1.0, "region_us": 1.0, "size_class": 0.8, "volatility": 0.2,
+             "min_supply_chain": 0.2},
+    # --- Materials / battery / supply chain ---
+    "ALB":  {"sector_materials": 1.0, "region_us": 1.0, "size_class": 0.6, "volatility": 1.0,
+             "min_supply_chain": 1.0},
+    "LIT":  {"sector_materials": 1.0, "region_us": 1.0, "size_class": 0.5, "volatility": 0.9,
+             "min_supply_chain": 0.9},
+    "QS":   {"sector_materials": 1.0, "region_us": 1.0, "size_class": 0.4, "volatility": 1.0,
+             "min_supply_chain": 0.9},
+    # --- Robots / industrials ---
+    "TSLA": {"sector_industrial": 1.0, "region_us": 1.0, "size_class": 1.0, "volatility": 1.0,
+             "min_supply_chain": 0.9},
+    "FANUY": {"sector_industrial": 1.0, "region_jp": 1.0, "size_class": 0.8, "volatility": 0.6,
+              "min_supply_chain": 0.4},
+    # --- Broad equity indices (ETF) ---
+    "SPY": {"sector_broad": 1.0, "region_us": 1.0, "size_class": 1.0, "volatility": 0.5,
+            "min_supply_chain": 0.2},
+    "QQQ": {"sector_broad": 1.0, "region_us": 1.0, "size_class": 1.0, "volatility": 0.7,
+            "min_supply_chain": 0.3},
+    "IWM": {"sector_broad": 1.0, "region_us": 1.0, "size_class": 0.3, "volatility": 0.7,
+            "min_supply_chain": 0.3},
+    "EFA": {"sector_broad": 1.0, "region_eu": 0.8, "region_jp": 0.7, "size_class": 0.9,
+            "volatility": 0.5, "min_supply_chain": 0.3},
+    # --- Bonds (asset class handles the rest) ---
+    "AGG": {"sector_bond": 1.0, "region_us": 1.0, "size_class": 1.0, "volatility": 0.3,
+            "min_supply_chain": 0.1},
+    "TLT": {"sector_bond": 1.0, "region_us": 1.0, "size_class": 1.0, "volatility": 0.6,
+            "min_supply_chain": 0.0},
+    "LQD": {"sector_bond": 1.0, "region_us": 1.0, "size_class": 1.0, "volatility": 0.4,
+            "min_supply_chain": 0.1},
+    "XLI": {"sector_industrial": 1.0, "region_us": 1.0, "size_class": 0.85, "volatility": 0.5,
+            "min_supply_chain": 0.5},
+    # Custom tickers used in the impact-agent sector map (demo placeholders).
+    "POWCO": {"sector_energy": 1.0, "region_us": 1.0, "size_class": 0.7, "volatility": 0.5,
+              "min_supply_chain": 0.5},
+    "AIRTECH": {"sector_industrial": 1.0, "region_us": 1.0, "size_class": 0.6,
+                "volatility": 0.8, "min_supply_chain": 0.6},
+}
 
 @dataclass
 class AssetContext:
-    """Volledige, genormaliseerde context voor één asset (ticker).
+    """Full, normalized context for one asset (ticker).
 
-    Alle velden zijn 0..1 (behalve waar anders vermeld). Neutrale default is
-    0.5 voor "onbekend/neutraal", 0.0 voor "afwezig".
+    All fields are 0..1 (except where noted). Neutral default is 0.5 for
+    "unknown/neutral", 0.0 for "absent".
     """
 
-    # --- Categorie 1: Impact Agent (kern) ---
-    impact_direction: float = 0.5      # 0=sterk negatief, 1=sterk positief
-    impact_magnitude: float = 0.0       # hoe groot de verwachte impact is
-    impact_confidence: float = 0.0      # zekerheid van de impact agent
-    impact_probability: float = 0.0     # kans dat de impact optreedt
-    impact_duration: float = 0.5        # hoe lang de impact blijft (0=kort,1=lang)
-    directness: float = 0.0             # 1=direct geraakt, 0=indirect
-    impact_novelty: float = 0.0         # hoe nieuw/onverwacht
-    market_surprise: float = 0.0        # afwijking van wat al verwacht werd
+    # --- Category 1: Impact Agent (core) ---
+    impact_direction: float = 0.5      # 0=strongly negative, 1=strongly positive
+    impact_magnitude: float = 0.0       # how large the expected impact is
+    impact_confidence: float = 0.0      # confidence of the impact agent
+    impact_probability: float = 0.0     # chance the impact occurs
+    impact_duration: float = 0.5        # how long the impact lasts (0=short,1=long)
+    directness: float = 0.0             # 1=directly hit, 0=indirectly
+    impact_novelty: float = 0.0         # how new/unexpected
+    market_surprise: float = 0.0        # deviation from what was already expected
 
-    # --- Categorie 2: Informatiebron ---
+    # --- Category 2: Information source ---
     source_quality: float = 0.5
     source_reliability: float = 0.5
     info_confidence: float = 0.5
     info_completeness: float = 0.5
-    cross_source_confirmation: float = 0.0  # 0=1 bron, 1=veel bevestiging
-    info_freshness: float = 0.5             # 1=vers, 0=oud
+    cross_source_confirmation: float = 0.0  # 0=1 source, 1=much confirmation
+    info_freshness: float = 0.5             # 1=fresh, 0=old
     info_novelty: float = 0.0
 
-    # --- Categorie 3: Type/inhoud (relevance) ---
+    # --- Category 3: Type/content (relevance) ---
     company_relevance: float = 0.0
     industry_relevance: float = 0.0
     macro_relevance: float = 0.0
@@ -71,35 +174,35 @@ class AssetContext:
     demand_relevance: float = 0.0
     fundamental_relevance: float = 0.0
 
-    # --- Categorie 4: Marktinterpretatie ---
-    market_sentiment: float = 0.5        # 0=negatief, 1=positief
+    # --- Category 4: Market interpretation ---
+    market_sentiment: float = 0.5        # 0=negative, 1=positive
     sentiment_confidence: float = 0.5
-    market_expectation: float = 0.5      # wat de markt al verwachtte
-    expectation_surprise: float = 0.0    # nieuws vs verwachting
+    market_expectation: float = 0.5      # what the market already expected
+    expectation_surprise: float = 0.0    # news vs expectation
     narrative_strength: float = 0.0
     market_attention: float = 0.0
     consensus_strength: float = 0.5
     contrarian_strength: float = 0.0
 
-    # --- Categorie 5: B2B Bottleneck ---
+    # --- Category 5: B2B Bottleneck ---
     demand_growth: float = 0.0
     supply_scarcity: float = 0.0
     supplier_concentration: float = 0.0
     bottleneck_strength: float = 0.0
     pricing_power: float = 0.0
     capacity_constraint: float = 0.0
-    substitutability: float = 0.5        # 1=moeilijk vervangbaar
+    substitutability: float = 0.5        # 1=hard to substitute
     barrier_to_entry: float = 0.0
     bottleneck_confidence: float = 0.0
 
-    # --- Categorie 6: Tijd ---
-    information_age: float = 0.0         # 1=net binnen, 0=oud
-    impact_decay: float = 0.0           # 1=impact nog vol, 0=uitgewerkt
+    # --- Category 6: Time ---
+    information_age: float = 0.0         # 1=just arrived, 0=old
+    impact_decay: float = 0.0           # 1=impact still full, 0=played out
     expected_duration: float = 0.5
-    event_proximity: float = 0.0         # 1=gebeurtenis nu, 0=ver weg
+    event_proximity: float = 0.0         # 1=event now, 0=far away
     signal_persistence: float = 0.0
 
-    # --- Portfolio/risico (bestaande, uit de env) ---
+    # --- Portfolio/risk (existing, from the env) ---
     regime_code: float = 0.0             # 0..3 bull/bear/highvol/crash
     pnl: float = 0.0                     # ongerealiseerde P&L % (-1..+5)
     holding_days: float = 0.0
@@ -107,39 +210,68 @@ class AssetContext:
     var_95: float = 0.0                  # -1..0
     crash_prob: float = 0.0
 
-    # --- Extra metadata (niet in de observatie, wel voor logging) ---
+    # --- Category 7: Asset/Business profile (KIND, generalized) ---
+    # Asset-class one-hot (always set from the impact agent).
+    asset_is_stock: float = 0.0
+    asset_is_bond: float = 0.0
+    asset_is_etf: float = 0.0
+    asset_is_commodity: float = 0.0
+    # Sector type (0..1 per sector; max 1 active).
+    sector_tech: float = 0.0
+    sector_consumer: float = 0.0
+    sector_healthcare: float = 0.0
+    sector_financial: float = 0.0
+    sector_energy: float = 0.0
+    sector_materials: float = 0.0
+    sector_industrial: float = 0.0
+    # Region.
+    region_us: float = 0.0
+    region_eu: float = 0.0
+    region_jp: float = 0.0
+    # Size/volatility profile (0..1).
+    size_class: float = 0.5              # 0=small-cap, 1=mega-cap
+    volatility: float = 0.5              # 0=low-vol/defensive, 1=high-vol
+
+    # --- Extra metadata (not in the observation, but for logging) ---
     entity: str = ""
     asset_class: str = ""
 
-    # De volgorde van de observatie-vector (subset per categorie).
+    # The order of the observation vector (subset per category).
     _OBS_KEYS: tuple[str, ...] = (
-        # Categorie 1 — Impact (kern)
+        # Category 1 — Impact (core)
         "impact_direction", "impact_magnitude", "impact_confidence",
         "impact_probability", "impact_duration", "directness",
         "impact_novelty", "market_surprise",
-        # Categorie 2 — Informatiebron
+        # Category 2 — Information source
         "source_quality", "source_reliability", "info_confidence",
         "info_completeness", "cross_source_confirmation",
         "info_freshness", "info_novelty",
-        # Categorie 3 — Relevance (top-5 gekozen)
+        # Category 3 — Relevance (top-5 chosen)
         "company_relevance", "industry_relevance", "macro_relevance",
         "geopolitical_relevance", "supply_chain_relevance",
-        # Categorie 4 — Marktinterpretatie
+        # Category 4 — Market interpretation
         "market_sentiment", "sentiment_confidence", "market_expectation",
         "expectation_surprise", "narrative_strength", "market_attention",
         "consensus_strength", "contrarian_strength",
-        # Categorie 5 — Bottleneck (top-5 gekozen)
+        # Category 5 — Bottleneck (top-5 chosen)
         "demand_growth", "supply_scarcity", "bottleneck_strength",
         "pricing_power", "capacity_constraint",
-        # Categorie 6 — Tijd
+        # Category 6 — Time
         "information_age", "impact_decay", "expected_duration",
         "event_proximity", "signal_persistence",
+        # Category 7 — Asset/Business profile (KIND)
+        "asset_is_stock", "asset_is_bond", "asset_is_etf", "asset_is_commodity",
+        "sector_tech", "sector_consumer", "sector_healthcare",
+        "sector_financial", "sector_energy", "sector_materials",
+        "sector_industrial",
+        "region_us", "region_eu", "region_jp",
+        "size_class", "volatility",
         # Portfolio/risico
         "regime_code", "pnl", "holding_days", "allocation", "var_95", "crash_prob",
     )
 
     def observation(self) -> np.ndarray:
-        """Bouw de genormaliseerde observatie-vector (float32)."""
+        """Build the normalized observation vector (float32)."""
         return np.array([float(getattr(self, k)) for k in self._OBS_KEYS],
                         dtype=np.float32)
 
@@ -154,7 +286,7 @@ class AssetContext:
         return d
 
     def update(self, **kwargs) -> AssetContext:
-        """Vul bekende velden; negeer onbekende (zodat lagen los kunnen vullen)."""
+        """Fill known fields; ignore unknown ones (so layers can fill separately)."""
         for k, v in kwargs.items():
             if hasattr(self, k) and v is not None:
                 try:
@@ -172,13 +304,13 @@ def build_asset_context(
     entity: str = "",
     asset_class: str = "",
 ) -> AssetContext:
-    """Bouw een AssetContext uit de outputs van de upstream-lagen.
+    """Build an AssetContext from the outputs of the upstream layers.
 
-    Elke laag vult alleen de velden die hij kent; de rest blijft neutraal.
+    Each layer fills only the fields it knows; the rest stays neutral.
     """
     ctx = AssetContext(entity=entity, asset_class=asset_class)
 
-    # Impact agent (categorie 1).
+    # Impact agent (category 1).
     if impact:
         ctx.update(
             impact_direction=impact.get("direction", 0.5),
@@ -191,7 +323,7 @@ def build_asset_context(
             market_surprise=impact.get("surprise", 0.0),
         )
 
-    # Fusion model (categorie 4 + sentiment).
+    # Fusion model (category 4 + sentiment).
     if fusion:
         sent = fusion.get("emotie", {}).get("sentiment", 0.0)
         ctx.update(
@@ -205,7 +337,7 @@ def build_asset_context(
             contrarian_strength=fusion.get("contrarian_strength", 0.0),
         )
 
-    # B2B bottleneck (categorie 5).
+    # B2B bottleneck (category 5).
     if bottleneck:
         ctx.update(
             demand_growth=bottleneck.get("demand_growth", 0.0),
@@ -216,7 +348,7 @@ def build_asset_context(
             bottleneck_confidence=bottleneck.get("confidence", 0.0),
         )
 
-    # Informatiebron (categorie 2).
+    # Information source (category 2).
     if source:
         ctx.update(
             source_quality=source.get("quality", 0.5),
@@ -228,4 +360,48 @@ def build_asset_context(
             info_novelty=source.get("novelty", 0.0),
         )
 
+    # Category 7 — Asset/Business Profile. Always: asset-class one-hot encoding
+    # the impact agent (stock/bond/etf/commodity). Further a fixed profile
+    # for known tickers (sector/region/size/volume); unknown tickers
+    # stay neutral on sector/region and only get the asset class.
+    _apply_asset_profile(ctx, asset_class, entity)
+
     return ctx
+
+
+def _apply_asset_profile(ctx: AssetContext, asset_class: str, entity: str) -> None:
+    """Fill in category 7 (asset class + profile) for this entity."""
+    ac = (asset_class or "").lower()
+    # Asset-class one-hot (altijd).
+    if ac in ("stock", "equity", "share"):
+        ctx.asset_is_stock = 1.0
+    elif ac in ("bond", "treasury", "credit", "government"):
+        ctx.asset_is_bond = 1.0
+    elif ac in ("etf", "index", "fund"):
+        ctx.asset_is_etf = 1.0
+    elif ac in ("commodity", "gold", "oil", "metal"):
+        ctx.asset_is_commodity = 1.0
+    else:
+        # Unknown asset class: default to equity unless clearly a bond.
+        ctx.asset_is_stock = 0.5
+        ctx.asset_is_bond = 0.0
+        ctx.asset_is_etf = 0.0
+        ctx.asset_is_commodity = 0.0
+    # Fixed profile for known tickers (only the fields we understand).
+    profile = ASSET_PROFILES.get((entity or "").upper(), {})
+    for k, v in profile.items():
+        field = {
+            "sector_tech": "sector_tech", "sector_consumer": "sector_consumer",
+            "sector_healthcare": "sector_healthcare",
+            "sector_financial": "sector_financial",
+            "sector_energy": "sector_energy",
+            "sector_materials": "sector_materials",
+            "sector_industrial": "sector_industrial",
+            "region_us": "region_us", "region_eu": "region_eu",
+            "region_jp": "region_jp", "region_asia": "region_jp",
+            "size_class": "size_class", "volatility": "volatility",
+        }.get(k)
+        if field and isinstance(v, (int, float)):
+            setattr(ctx, field, float(max(0.0, min(1.0, v))))
+    # If an ETF/index has no sector profile, leave the sector fields 0.
+    # Observable-consistency: one active sector keeps the vector sparse.

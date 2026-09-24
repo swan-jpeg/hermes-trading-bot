@@ -45,8 +45,8 @@ warnings.filterwarnings("ignore")
 
 
 MODELS_DIR = pathlib.Path(__file__).resolve().parent.parent / "models"
-# Grote replay-data gaat op de EXTERNE SSD (configureerbaar via env-var).
-# Op de Windows-PC van de gebruiker: set REPLAY_DATA_DIR=D:\trading-bot-replay
+# Large replay data goes on the EXTERNAL SSD (configurable via env-var).
+# On the user's Windows PC: set REPLAY_DATA_DIR=D:\trading-bot-replay
 REPLAY_DATA_DIR = pathlib.Path(os.environ.get(
     "REPLAY_DATA_DIR", "/mnt/ssd/trading-bot-replay"))
 
@@ -155,7 +155,7 @@ def build_asset_contexts(prices: np.ndarray, signals: list[dict],
             source_quality=0.7, source_reliability=0.7, info_confidence=0.6,
             info_completeness=0.6, cross_source_confirmation=0.5,
             info_freshness=0.8, info_novelty=0.3,
-            # Categorie 4 — marktinterpretatie (uit fusion)
+            # Category 4 — market interpretation (from fusion)
             market_sentiment=float(np.clip((s + 1) / 2, 0, 1)),
             sentiment_confidence=float(np.clip(0.5 + abs(s) * 0.3, 0, 1)),
             market_expectation=0.5,

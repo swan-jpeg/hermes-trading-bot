@@ -150,8 +150,8 @@ class OpportunityScore:
         elif corr < 0.6:
             corr_comp = 50.0
 
-        # Alpha signals (interfaces, neutral if unavailable). De deler is het
-        # aantal keys, zodat de alpha-component nooit over 100 gaat en elke
+        # Alpha signals (interfaces, neutral if unavailable). The divider is the
+        # number of keys, so that the alpha component never exceeds 100 and each
         # gevulde signaal eerlijk telt.
         alpha_keys = [
             "prediction_confidence", "model_agreement", "fundamental_quality",

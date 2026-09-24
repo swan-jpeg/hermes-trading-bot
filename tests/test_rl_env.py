@@ -8,11 +8,12 @@ from hermes_bot.rl import RulePolicy
 from hermes_bot.rl.context import AssetContext
 from hermes_bot.rl.env import TradingEnv
 
-# Indexen in de 44-dim observatie (zie AssetContext._OBS_KEYS).
-# Portfolio/risico-velden staan achteraan.
-_IDX_ALLOC = 41
-_IDX_PNL = 39
-_IDX_SENTIMENT = 0  # impact_direction (categorie 1, kern)
+# Indexes derived from AssetContext._OBS_KEYS (dynamic, no hardcoded
+# posities). Portfolio/risico-velden staan achteraan.
+_OBS_KEYS = AssetContext._OBS_KEYS
+_IDX_ALLOC = _OBS_KEYS.index("allocation")
+_IDX_PNL = _OBS_KEYS.index("pnl")
+_IDX_SENTIMENT = _OBS_KEYS.index("impact_direction")  # categorie 1, kern
 
 
 def _make_env(n: int = 100, contexts: list[AssetContext] | None = None) -> TradingEnv:
@@ -32,10 +33,10 @@ def _make_env(n: int = 100, contexts: list[AssetContext] | None = None) -> Tradi
 
 
 def test_env_observation_shape() -> None:
-    """The observation is the rich AssetContext vector (44-dim)."""
+    """The observation is the rich AssetContext vector (len == obs_dim)."""
     env = _make_env()
     obs, _ = env.reset()
-    assert obs.shape == (44,)
+    assert obs.shape == (len(_OBS_KEYS),)
     assert obs.dtype == np.float32
 
 
@@ -146,4 +147,4 @@ def test_asset_context_observation_dim() -> None:
     ctx = AssetContext()
     env = _make_env()
     assert ctx.obs_dim == env.observation_space.shape[0]
-    assert ctx.observation().shape == (44,)
+    assert ctx.observation().shape == (len(_OBS_KEYS),)

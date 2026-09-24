@@ -574,13 +574,13 @@ document.addEventListener('keydown', e => { if(e.key==='Escape') archClose(); })
 
 
 def _architecture_html() -> str:
-    # Node-posities (x, y, breedte, hoogte) — logisch van boven naar beneden,
-    # met een RISK-cluster rechts waarin regional/regime/MonteCarlo dicht bij
-    # de Risk Engine staan (korte, duidelijke pijlen — geen lange diagonalen).
+    # Node positions (x, y, width, height) — logically from top to bottom,
+    # with a RISK-cluster on the right in which regional/regime/MonteCarlo are close to
+    # The Risk Engine is located (short, clear arrows — no long diagonals).
     # Laag 1 · DATA
     n_server = _node("server", 160, 48, 220, 44, "24/7 Server", ["orchestratie · scheduler"], "data")
     n_scrape = _node("scrape", 640, 48, 220, 44, "Webscraping", ["speech · reports · alerts · marktdata"], "data")
-    # Laag 2 · SIGNALEN (alpha-inputs voor impact/fusion)
+    # Layer 2 · SIGNALS (alpha-inputs for impact/fusion)
     n_speech = _node("speech", 70, 194, 160, 56, "Speech", ["CEO's · landsleiders"], "")
     n_reports = _node("reports", 260, 194, 180, 56, "Reports & Alerts", ["quarterly · overheidsuitgaven"], "")
     n_alerts = _node("alerts", 470, 194, 170, 56, "Nieuws & Point-loops", ["alerts"], "")
@@ -589,7 +589,7 @@ def _architecture_html() -> str:
     n_impact = _node("impact", 430, 320, 220, 52, "Impact Agent", ["welke stocks · LLM-skill"], "core", "gCore")
     # Laag 4 · FUSIE (wat te kopen)
     n_fusion = _node("fusion", 430, 425, 220, 56, "Fusion Model", ["kwaliteit · zekerheid · emotie"], "core", "gCore")
-    # Laag 5 · BESLUIT + RISICO (risk cluster: inputs dicht bij de risk engine)
+    # Layer 5 · DECISION + RISK (risk cluster: inputs close to the risk engine)
     n_rl = _node("rl", 120, 560, 230, 56, "RL-Fusion Model", ["buy · sell · hold · hedge"], "core", "gCore")
     n_regional = _node("regional", 390, 550, 160, 46, "Regionale Scores", ["veiligheid · economie"], "risk", "gRisk")
     n_regime = _node("regime", 580, 550, 180, 46, "Regime / Orderflow", ["bull · crash · COT"], "risk", "gRisk")
@@ -611,7 +611,7 @@ def _architecture_html() -> str:
     e["e_speech_impact"] = _edge(150, 250, 450, 320, 0.5, 0.4)
     e["e_reports_impact"] = _edge(350, 250, 480, 320, 0.5, 0.4)
     e["e_alerts_impact"] = _edge(555, 250, 540, 320, 0.5, 0.4)
-    # bottleneck: alpha-signal -> fusion (via dezelfde impact-lijn niet; rechstreeks)
+    # bottleneck: alpha-signal -> fusion (via the same impact line not; directly)
     e["e_bottleneck_fusion"] = _edge(760, 250, 560, 425, 0.5, 0.5)
     # impact -> fusion (per beïnvloede entiteit)
     e["e_impact_fusion"] = _edge(540, 372, 540, 425, 0.5, 0.4)

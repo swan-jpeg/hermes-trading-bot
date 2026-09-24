@@ -74,7 +74,7 @@ def test_to_fusion_inputs_keeps_per_entity_llm_sentiment() -> None:
     inputs = agent.to_fusion_inputs(r, sentiment=0.5)  # global fallback 0.5
     nvda = [i for i in inputs if i["entity_id"] == "NVDA"]
     assert nvda and nvda[0]["sentiment"] == 0.8, "NVDA per-entity sentiment verloren"
-    # Andere (zonder eigen sentiment) krijgen de global 0.5.
+    # Others (without own sentiment) get the global 0.5.
     other = [i for i in inputs if i["entity_id"] != "NVDA"]
     if other:
         assert all(i["sentiment"] == 0.5 for i in other)

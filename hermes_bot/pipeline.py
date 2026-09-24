@@ -208,7 +208,7 @@ class Pipeline:
                 impact_inputs.extend(
                     self.impact_agent.to_fusion_inputs(result, sentiment=inp.get("sentiment", 0.0))
                 )
-                # Impact-vector (categorie 1) per beïnvloede entiteit.
+                # Impact vector (category 1) per affected entity.
                 vec = {
                     "direction": result.direction,
                     "magnitude": result.magnitude,
@@ -229,21 +229,21 @@ class Pipeline:
         # 3. Fusion combines all sources.
         fused = self.fusion.fuse(all_inputs)
 
-        # 3b. Per beïnvloede entiteit een AssetContext bouwen (RL-input).
+        # 3b. Build an AssetContext per affected entity (RL-input)
         #     Impact-vector (categorie 1) + fusion (categorie 4) + bottleneck
-        #     (categorie 5) + bron-info (categorie 2). Dit is wat het RL-model
+        #     (category 5) + source info (category 2). This is what the RL model
         #     per asset ziet.
         asset_contexts: list[AssetContext] = []
         for item in impacted:
             entity = item.get("entity", "")
             if not entity:
                 continue
-            # Fusion per entiteit (alleen de impact-input voor die entiteit).
+            # Fusion per entity (only the impact input for that entity).
             ent_inputs = [i for i in impact_inputs if i.get("entity_id") == entity]
             ent_fused = self.fusion.fuse(ent_inputs) if ent_inputs else fused
-            # Bottleneck voor deze entiteit (indien aanwezig).
+            # Bottleneck for this entity (if present).
             ent_bn = next((i for i in bottleneck_inputs if i.get("entity_id") == entity), None)
-            # Bron-info: uit de oorspronkelijke web-input die deze entiteit raakte.
+            # Source info: from the original web input that this entity relates to.
             src = next((i for i in inputs if i.get("entity_id") == entity), None)
             ctx = build_asset_context(
                 impact=impact_vectors.get(entity, item),

@@ -15,7 +15,7 @@ class PortfolioState:
     """
 
     cash: float = 0.0
-    positions: dict[str, Position] = field(default_factory=dict)  # entity -> positie
+    positions: dict[str, Position] = field(default_factory=dict)  # entity -> position
     regime: str = "unknown"
     # Highest price since entry per entity (for trailing stop).
     peaks: dict[str, float] = field(default_factory=dict)

@@ -111,11 +111,12 @@ def build_fusion_signals(prices: np.ndarray, seed: int = 42) -> list[dict]:
 
 def build_asset_contexts(prices: np.ndarray, signals: list[dict],
                           seed: int = 42) -> list[AssetContext]:
-    """Bouw per dag een rijke AssetContext voor RL-training.
+    """Build a rich AssetContext for RL training per day.
 
-    In productie komt dit uit de impact agent + fusion + bottleneck + bron-info.
-    Voor training genereren we plausibele waarden zodat het model de mapping
-    impact-vector -> actie leert. De impact-vector (categorie 1) is de kern.
+    In production this comes from the impact agent + fusion +
+    bottleneck + source info. For training we generate plausible
+    values so the model learns the impact-vector -> action mapping.
+    The impact vector (category 1) is the core.
     """
     rng = np.random.default_rng(seed)
     n = len(prices)
@@ -139,7 +140,7 @@ def build_asset_contexts(prices: np.ndarray, signals: list[dict],
             source_quality=0.7, source_reliability=0.7, info_confidence=0.6,
             info_completeness=0.6, cross_source_confirmation=0.5,
             info_freshness=0.8, info_novelty=0.3,
-            # Categorie 4 — marktinterpretatie (uit fusion)
+            # Category 4 — market interpretation (from fusion)
             market_sentiment=float(np.clip((s + 1) / 2, 0, 1)),
             sentiment_confidence=float(np.clip(0.5 + abs(s) * 0.3, 0, 1)),
             market_expectation=0.5,

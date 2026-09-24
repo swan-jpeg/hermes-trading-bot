@@ -64,8 +64,8 @@ class TradingEnv(gym.Env):
         self.rule_policy = rule_policy
         self.max_steps = max_steps
         self.rng = np.random.default_rng(seed)
-        # Rijke per-asset context (impact/fusion/bottleneck/source). Als niet
-        # gegeven, bouw een neutrale AssetContext per stap uit fusion_signals.
+        # Rich per-asset context (impact/fusion/bottleneck/source). If not
+        # given, build a neutral AssetContext per step from fusion_signals.
         self.asset_contexts = asset_contexts or [
             AssetContext() for _ in range(max(len(prices), 1))
         ]

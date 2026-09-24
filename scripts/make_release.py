@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """Create a GitHub Release with download artifacts (core + full).
 
-- Bepaalt de volgende versie (v0.1.0, v0.2.0, ...) uit de laatste tag.
-- Bouwt twee zips:
-    * core  — alleen de risk engine + kern (klein, snel te runnen)
-    * full  — het hele project (alles, incl. heavy-model extras)
-- Maakt een GitHub Release aan met beide artefacten (oude releases blijven).
-- Werkt de README-versietabel bij.
+- Determines the next version (v0.1.0, v0.2.0, ...) from the latest tag.
+- Builds two zips:
+    * core  — only the risk engine + essentials (small, quick to run)
+    * full  — the whole project (everything, incl. heavy-model extras)
+- Creates a GitHub Release with both artifacts (old releases stay).
+- Updates the README version table.
 
-Gebruik:
-    uv run python scripts/make_release.py            # maak release (volgende versie)
-    uv run python scripts/make_release.py --version v0.2.0   # specifieke versie
-    uv run python scripts/make_release.py --dry-run  # alleen zips bouwen, geen release
+Usage:
+    uv run python scripts/make_release.py            # make release (next version)
+    uv run python scripts/make_release.py --version v0.2.0   # specific version
+    uv run python scripts/make_release.py --dry-run  # only build zips, no release
 """
 from __future__ import annotations
 
@@ -94,7 +94,7 @@ def _next_version() -> str:
 
 
 def _project_files(root: pathlib.Path, only: list[str] | None = None) -> list[pathlib.Path]:
-    """Alle projectbestanden, gefilterd. `only` = subset (core)."""
+    """All project files, filtered. `only` = subset (core)."""
     out: list[pathlib.Path] = []
     for p in sorted(root.rglob("*")):
         if not p.is_file():
@@ -145,7 +145,7 @@ def _upload_asset(release_id: str, token: str, path: pathlib.Path) -> None:
     req.data = data
     with urllib.request.urlopen(req, timeout=120) as r:
         d = json.loads(r.read())
-        print(f"  ✓ geüpload: {d.get('name')} ({len(data)//1024} KB)")
+        print(f"  ✓ uploaded: {d.get('name')} ({len(data)//1024} KB)")
 
 
 def _amsterdam_now() -> str:
@@ -201,14 +201,14 @@ def _update_readme(version: str, core_name: str, full_name: str,
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Maak een GitHub Release met artefacten")
-    ap.add_argument("--version", default=None, help="versie-tag (default: volgende)")
-    ap.add_argument("--dry-run", action="store_true", help="alleen zips bouwen, geen release")
-    ap.add_argument("--changelog", default="", help="wat er veranderd is in deze release")
+    ap = argparse.ArgumentParser(description="Create a GitHub Release with artifacts")
+    ap.add_argument("--version", default=None, help="version tag (default: next)")
+    ap.add_argument("--dry-run", action="store_true", help="only build zips, no release")
+    ap.add_argument("--changelog", default="", help="what changed in this release")
     args = ap.parse_args()
 
     version = args.version or _next_version()
-    print(f"Versie: {version}")
+    print(f"Version: {version}")
 
     # Build the two zips.
     core_zip = _build_zip(ROOT, CORE_MODULES, version, "core")
@@ -219,12 +219,12 @@ def main() -> int:
     print(f"  full: {len(full_zip)//1024} KB ({full_name})")
 
     if args.dry_run:
-        print("Dry-run: zips gebouwd, geen release aangemaakt.")
+        print("Dry-run: zips built, no release created.")
         return 0
 
     token = _get_github_token()
     if not token:
-        print("⚠ Geen GitHub-token gevonden in ~/.git-credentials.")
+        print("⚠ No GitHub token found in ~/.git-credentials.")
         return 2
 
     # Create the release.
@@ -236,11 +236,11 @@ def main() -> int:
     req.add_header("Content-Type", "application/json")
     stamp = _amsterdam_now()
     body = (f"**Posted:** {stamp} (Amsterdam)\n\n"
-            f"Download **core** (alleen de risk engine + kern, klein) of "
-            f"**full** (het hele project incl. heavy-model extras).\n\n")
+            f"Download **core** (risk engine + essentials, small) or "
+            f"**full** (the whole project incl. heavy-model extras).\n\n")
     if args.changelog:
         body += f"**Changes:** {args.changelog}\n\n"
-    body += "Zie de README voor installatie-instructies."
+    body += "See the README for installation instructions."
     req.data = json.dumps({
         "tag_name": version,
         "name": f"Hermes Trading Bot {version}",
@@ -252,9 +252,9 @@ def main() -> int:
         with urllib.request.urlopen(req, timeout=60) as r:
             d = json.loads(r.read())
             release_id = d["id"]
-            print(f"Release aangemaakt: {d['html_url']}")
+            print(f"Release created: {d['html_url']}")
     except urllib.error.HTTPError as e:
-        print(f"⚠ Release aanmaken mislukt: {e.code} {e.read()[:200]}")
+        print(f"⚠ Failed to create release: {e.code} {e.read()[:200]}")
         return 3
 
     # Upload beide artefacten.
@@ -270,8 +270,8 @@ def main() -> int:
     _update_readme(version, core_name, full_name, args.changelog)
     _git("add", "README.md")
     _git("-c", "user.email=bot@local", "-c", "user.name=bot",
-         "commit", "-m", f"Release {version}: README download-tabel bijwerken")
-    print("README bijgewerkt en gecommit.")
+         "commit", "-m", f"Release {version}: update README download table")
+    print("README updated and committed.")
     return 0
 
 

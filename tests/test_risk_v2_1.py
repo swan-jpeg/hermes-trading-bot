@@ -147,7 +147,7 @@ def test_v21_high_exposure_in_bull() -> None:
 
 
 def test_regime_alpha_lowers_exposure_in_crash() -> None:
-    """regime_sentiment (risico-input) verlaagt de exposure bij crash."""
+    """regime_sentiment (risk input) reduces exposure during crash."""
 
     def exp_for(regime_sent: float) -> float:
         e = _engine()
@@ -156,7 +156,7 @@ def test_regime_alpha_lowers_exposure_in_crash() -> None:
         e.hist_returns = list(rng.normal(0.0005, 0.006, 40))
         e.prev_exposure = 0.5
         pf = PortfolioState(cash=100000)
-        # Loop door zodat _smooth zijn clamp kan oplossen.
+        # Loop through so that _smooth can resolve its clamp.
         for i in range(5):
             exp, bd = e.approve(_decision(), pf, 100000 * (1 + 0.001 * i),
                                 alpha_signals={"regime_sentiment": regime_sent,
@@ -169,7 +169,7 @@ def test_regime_alpha_lowers_exposure_in_crash() -> None:
 
 
 def test_regional_score_adds_opportunity() -> None:
-    """regional_score als alpha-signaal verhoogt de opp-score monotoon."""
+    """regional_score as alpha signal increases the overall score monotonically."""
     opp = OpportunityScore({"risk": {}})
     returns = [0.002] * 20
     lo, bd_lo = opp.score(returns, vol=0.10, vol_baseline=0.125, drawdown=0.0,

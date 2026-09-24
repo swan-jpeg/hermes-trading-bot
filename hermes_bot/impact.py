@@ -1,35 +1,35 @@
-"""Impact Agent — koppelt gebeurtenissen aan beïnvloede instrumenten.
+"""Impact Agent — links events to affected instruments.
 
-De ontbrekende schakel in de keten: bepaalt WELKE instrumenten (stocks,
-obligaties, ETF's) geraakt worden door een gebeurtenis (speech, kwartaalrapport,
-overheidsuitgave, nieuws). Dit is een PARALLELLE stap vóór het fusion-model:
+The missing link in the chain: it decides WHICH instruments (stocks, bonds,
+ETFs) are affected by an event (speech, quarterly report, government
+spending, news). This is a PARALLEL step before the fusion model:
 
-    webscraping (gebeurtenis)
-        ↓
-    IMPACT-AGENT  ← bepaalt: "dit raakt NVDA, TSLA, AGG"
-        ↓
-    per beïnvloede entiteit: vector {entity, asset_class, sentiment, confidence}
-        ↓
-    RL-model (per entiteit: welk instrument + gewicht + zekerheid)
-        ↓
-    risk engine + Monte Carlo → portfolio → executie
+    webscraping (event)
+        |
+    IMPACT-AGENT  <- decides: "this hits NVDA, TSLA, AGG"
+        |
+    per affected entity: vector {entity, asset_class, sentiment, confidence}
+        |
+    RL model (per entity: which instrument + weight + confidence)
+        |
+    risk engine + Monte Carlo -> portfolio -> execution
 
-Zonder deze agent is het RL-model "blind" — het weet niet welke stocks geraakt
-worden door een speech of rapport. Deze agent levert die koppeling.
+Without this agent the RL model is "blind" — it does not know which stocks
+are hit by a speech or report. This agent provides that link.
 
-Twee modi:
-- ImpactAgent: keyword/sector-matching (snel, gratis, offline, altijd).
-- LLMImpactAgent: gebruikt een eigen LLM met de impact-agent-skill
-  (impact_agent/skill/impact-agent-skill.md) om de context te begrijpen.
-  De API-key/base_url komen uit .env, nooit uit code.
+Two modes:
+- ImpactAgent: keyword/sector matching (fast, free, offline, always).
+- LLMImpactAgent: uses your own LLM with the impact-agent skill
+  (impact_agent/skill/impact-agent-skill.md) to understand the context.
+  The API key/base_url come from .env, never from code.
 """
 from __future__ import annotations
 
 import pathlib
 from dataclasses import dataclass, field
 
-# Sector/onderwerp -> beïnvloede instrumenten (tickers + assetklasse).
-# Uitbreidbaar: voeg keywords toe per sector.
+# Sector/topic -> affected instruments (tickers + asset class).
+# Extensible: add keywords per sector.
 _SECTOR_MAP: dict[str, dict] = {
     "semiconductor": {
         "keywords": ["chip", "semiconductor", "halfgeleider", "nvidia", "tsmc",
@@ -90,38 +90,38 @@ _SECTOR_MAP: dict[str, dict] = {
 
 @dataclass
 class ImpactResult:
-    """Output van de impact-agent: welke instrumenten worden geraakt."""
+    """Output of the impact agent: which instruments are affected."""
 
     event: str
     matched_sectors: list[str] = field(default_factory=list)
     impacted: list[dict] = field(default_factory=list)  # [{entity, asset_class, reason}]
     confidence: float = 0.0
-    # Impact-vector (categorie 1 van de RL-inputs): per analyse, genormaliseerd.
-    direction: float = 0.5       # 0=negatief, 1=positief
-    magnitude: float = 0.0        # hoe groot de verwachte impact
-    probability: float = 0.0     # kans dat de impact optreedt
-    duration: float = 0.5        # hoe lang de impact blijft
-    directness: float = 0.0      # 1=direct geraakt, 0=indirect
-    novelty: float = 0.0         # hoe nieuw/onverwacht
-    surprise: float = 0.0        # afwijking van wat al verwacht werd
+    # Impact vector (category 1 of the RL inputs): per analysis, normalized.
+    direction: float = 0.5       # 0=negative, 1=positive
+    magnitude: float = 0.0        # how large the expected impact is
+    probability: float = 0.0     # chance the impact actually occurs
+    duration: float = 0.5        # how long the impact lasts
+    directness: float = 0.0      # 1=directly hit, 0=indirectly
+    novelty: float = 0.0         # how new/unexpected
+    surprise: float = 0.0        # deviation from what was already expected
 
 
 class ImpactAgent:
-    """Koppelt een gebeurtenis aan beïnvloede instrumenten via keyword-matching."""
+    """Links an event to affected instruments via keyword matching."""
 
     def __init__(self, sector_map: dict | None = None) -> None:
         self.sector_map = sector_map or _SECTOR_MAP
 
     def analyze(self, event: str, source: str = "news",
                 entity_id: str = "") -> ImpactResult:
-        """Bepaal welke instrumenten door deze gebeurtenis worden geraakt.
+        """Determine which instruments are hit by this event.
 
-        event: de tekst van de gebeurtenis (speech, rapport, overheidsuitgave).
+        event: the text of the event (speech, report, government spending).
         source: speech | report | alert | government.
-        entity_id: optionele entiteit (bv. "trump") die ook als hint dient.
+        entity_id: optional entity (e.g. "trump") that also serves as a hint.
         """
         text = (event + " " + entity_id).lower()
-        # Speech van een wereldleider (trump, biden, putin, ...) -> macro-impact.
+        # Speech of a world leader (trump, biden, putin, ...) -> macro impact.
         if source == "speech" and any(
             leader in entity_id.lower()
             for leader in ("trump", "biden", "putin", "leader", "president", "minister")
@@ -138,7 +138,7 @@ class ImpactAgent:
                         "asset_class": info["asset_class"],
                         "reason": f"{sector} ({source})",
                     })
-        # Dedupliceer op entity (behoud eerste).
+        # Deduplicate on entity (keep the first).
         seen: set[str] = set()
         unique: list[dict] = []
         for item in impacted:
@@ -146,8 +146,8 @@ class ImpactAgent:
                 seen.add(item["entity"])
                 unique.append(item)
         confidence = min(1.0, 0.3 + 0.2 * len(matched)) if matched else 0.0
-        # Impact-vector (categorie 1): afgeleid uit de match.
-        # direction: positief als er groei/positieve sectoren zijn, anders neutraal.
+        # Impact vector (category 1): derived from the match.
+        # direction: positive if there are growth/positive sectors, else neutral.
         direction = 0.5
         if matched:
             pos_sectors = {"semiconductor", "actuators", "power", "battery",
@@ -157,11 +157,11 @@ class ImpactAgent:
             neg = sum(1 for s in matched if s in neg_sectors)
             direction = 0.5 + 0.5 * (pos - neg) / max(1, len(matched))
         magnitude = min(1.0, 0.2 + 0.2 * len(matched)) if matched else 0.0
-        probability = confidence  # kans dat de impact optreedt ~ zekerheid
-        duration = 0.5 if matched else 0.0  # neutraal; LLM kan dit verfijnen
-        directness = 1.0 if matched else 0.0  # keyword-match = direct geraakt
-        novelty = 0.3 if matched else 0.0     # default laag; LLM kan verhogen
-        surprise = 0.0  # default: geen marktverwachting bekend
+        probability = confidence  # chance the impact occurs ~ confidence
+        duration = 0.5 if matched else 0.0  # neutral; the LLM can refine this
+        directness = 1.0 if matched else 0.0  # keyword match = directly hit
+        novelty = 0.3 if matched else 0.0     # default low; the LLM can raise it
+        surprise = 0.0  # default: no market expectation known
         return ImpactResult(
             event=event,
             matched_sectors=matched,
@@ -177,13 +177,12 @@ class ImpactAgent:
         )
 
     def to_fusion_inputs(self, result: ImpactResult, sentiment: float = 0.0) -> list[dict]:
-        """Zet de impact-analyse om naar fusion-inputs per beïnvloede entiteit.
+        """Convert the impact analysis to fusion inputs per affected entity.
 
-        Elke beïnvloede entiteit krijgt een eigen fusion-input, zodat het
-        fusion-model + RL-model per instrument kunnen beslissen. Wanneer de
-        entiteit een eigen LLM-gegenereerd sentiment heeft (bv. NVDA +0.8 van
-        de impact-agent), gebruiken we DAT per-instrument sentiment in plaats
-        van het globale fallback-sentiment.
+        Each affected entity gets its own fusion input, so the fusion model +
+        RL model can decide per instrument. When the entity has its own
+        LLM-generated sentiment (e.g. NVDA +0.8 from the impact agent), we use
+        THAT per-instrument sentiment instead of the global fallback sentiment.
         """
         if not result.impacted:
             return []
@@ -201,17 +200,17 @@ class ImpactAgent:
 
 
 class LLMImpactAgent(ImpactAgent):
-    """Impact Agent met optionele LLM-interpretatie.
+    """Impact Agent with optional LLM interpretation.
 
-    Gebruikt een eigen LLM (via API-key/base_url uit .env, NIET in GitHub) om de
-    gebeurtenis te interpreteren en beïnvloede instrumenten te bepalen. Dit
-    vangt gevallen die keyword-matching mist, bv.:
+    Uses your own LLM (via API key/base_url from .env, NOT in GitHub) to
+    interpret the event and determine the affected instruments. This catches
+    cases that keyword matching misses, e.g.:
 
-        "Trump zegt dat Jensen Huang een goede gozer is en je hem kan vertrouwen"
-        -> LLM begrijpt: dit is positief voor NVIDIA (NVDA).
+        "Trump says Jensen Huang is a good guy, you can trust him"
+        -> the LLM understands: this is positive for NVIDIA (NVDA).
 
-    De LLM krijgt de impact-agent-skill (impact_agent/skill/impact-agent-skill.md)
-    als system-prompt. Zonder key valt het terug op de keyword-matching.
+    The LLM gets the impact-agent skill (impact_agent/skill/impact-agent-skill.md)
+    as the system prompt. Without a key it falls back to keyword matching.
     """
 
     def __init__(self, sector_map: dict | None = None,
@@ -235,47 +234,47 @@ class LLMImpactAgent(ImpactAgent):
 
     def analyze(self, event: str, source: str = "news",
                 entity_id: str = "") -> ImpactResult:
-        """Bepaal beïnvloede instrumenten, met LLM-interpretatie als beschikbaar."""
-        # Eerst de snelle keyword-matching (altijd).
+        """Determine affected instruments, using LLM interpretation if available."""
+        # First the fast keyword matching (always).
         base = super().analyze(event, source, entity_id)
         key = self._get_key()
         if not key or not event.strip():
             return base
-        # LLM-interpretatie: vraag het model welke instrumenten geraakt worden.
+        # LLM interpretation: ask the model which instruments are hit.
         try:
             llm_impact, llm_meta = self._llm_interpret(event, source, key)
             if llm_impact:
-                # Combineer: LLM-resultaat + keyword-matching (dedupliceer).
+                # Combine: LLM result + keyword matching (deduplicate).
                 combined = {i["entity"]: i for i in base.impacted}
                 for item in llm_impact:
                     combined[item["entity"]] = item
                 base.impacted = list(combined.values())
                 base.confidence = round(max(base.confidence, 0.7), 4)
-                # Impact-vector uit de LLM-meta (verfijnd t.o.v. keyword-match).
+                # Impact vector from the LLM meta (refined vs keyword match).
                 for k in ("direction", "magnitude", "probability", "duration",
                           "directness", "novelty", "surprise"):
                     if k in llm_meta:
                         setattr(base, k, round(float(llm_meta[k]), 4))
         except Exception:  # noqa: BLE001
-            pass  # fallback naar keyword-matching
+            pass  # fallback to keyword matching
         return base
 
     def _llm_interpret(self, event: str, source: str, key: str) -> tuple[list[dict], dict]:
-        """Vraag het LLM (via de skill) welke instrumenten geraakt worden.
+        """Ask the LLM (via the skill) which instruments are hit.
 
-        Returns: (instrumenten, impact-vector-meta). De impact-vector-meta
-        bevat de categorie-1 velden (direction, magnitude, probability,
-        duration, directness, novelty, surprise) die het RL-model als kern
-        gebruikt.
+        Returns: (instruments, impact-vector meta). The impact-vector meta
+        contains the category-1 fields (direction, magnitude, probability,
+        duration, directness, novelty, surprise) that the RL model uses as
+        its core.
         """
         import json
         import urllib.error
         import urllib.request
 
-        # Laad de impact-agent skill als system-prompt (indien aanwezig).
+        # Load the impact agent skill as the system prompt (if present).
         skill_path = (pathlib.Path(__file__).resolve().parent.parent
                       / "impact_agent" / "skill" / "impact-agent-skill.md")
-        system_prompt = "Je bent een financieel impact-analist. Antwoord alleen met geldige JSON."
+        system_prompt = "You are a financial impact analyst. Reply with valid JSON only."
         try:
             if skill_path.exists():
                 system_prompt = skill_path.read_text()
@@ -283,8 +282,8 @@ class LLMImpactAgent(ImpactAgent):
             pass
 
         prompt = (
-            f"Gebeurtenis ({source}): {event}\n\n"
-            "Antwoord met een JSON-object:\n"
+            f"Event ({source}): {event}\n\n"
+            "Reply with a JSON object:\n"
             '{"impact": [{"entity": "NVDA", "asset_class": "stock", '
             '"sentiment": 0.8, "reason": "..."}], '
             '"meta": {"direction": 0.8, "magnitude": 0.7, "probability": 0.6, '
@@ -308,7 +307,7 @@ class LLMImpactAgent(ImpactAgent):
         with urllib.request.urlopen(req, timeout=30) as r:
             d = json.loads(r.read())
         content = d["choices"][0]["message"]["content"].strip()
-        # Haal het JSON-object eruit (het model kan er tekst omheen zetten).
+        # Extract the JSON object from it (the model can put text around it).
         start = content.find("{")
         end = content.rfind("}")
         if start == -1 or end == -1:
@@ -331,9 +330,9 @@ class LLMImpactAgent(ImpactAgent):
 
 
 def build_impact_agent(config: dict | None = None) -> ImpactAgent:
-    """Factory: bouw de impact-agent (keyword-matching + optionele LLM)."""
+    """Factory: build the impact agent (keyword matching + optional LLM)."""
     cfg = config or {}
     if cfg.get("use_llm"):
         return LLMImpactAgent(
-            model=cfg.get("llm_model", "meta-llama/llama-3.1-8b-instruct:free"))
+            model=cfg.get("llm_model", "stepfun/step-3.7-flash:free"))
     return ImpactAgent()

@@ -35,7 +35,7 @@ from hermes_bot.schemas import MonteCarloResult, RLRawDecision
 
 
 # ---------------------------------------------------------------------------
-# REGIME-DETECTIE — eenvoudig, uitlegbaar, alleen historische info
+# REGIME DETECTION — simple, explainable, historical info only
 # ---------------------------------------------------------------------------
 def detect_regime(
     drawdown: float,
@@ -96,7 +96,7 @@ class RiskEngineV2:
         self.cfg = config.get("risk", {})
         self.mc = MonteCarloEngineV2(seed=self.cfg.get("seed", 42), n_paths=2000)
 
-        # Exposure-parameters.
+        # Exposure parameters.
         self.base_exposure = self.cfg.get("base_exposure", 0.90)
         self.min_exposure = self.cfg.get("min_exposure", 0.0)
         self.max_exposure = self.cfg.get("max_exposure", 1.0)
@@ -148,7 +148,7 @@ class RiskEngineV2:
             return 0.0
         return equity / self.peak_equity - 1.0
 
-    # --- Volatiliteit (alleen historische returns) ---
+    # --- Volatility (historical returns only) ---
     def _volatility(self) -> float:
         if len(self.hist_returns) < 2:
             return 0.0

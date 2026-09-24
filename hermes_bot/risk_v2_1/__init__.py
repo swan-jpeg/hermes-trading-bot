@@ -328,7 +328,7 @@ class RiskEngineV21:
         tactical_mult = self._tactical_multiplier(vol_accel, drawdown)
         recovery_mult = self._recovery_multiplier(recovery_state)
 
-        # Regime/orderflow is een risico-input: monotoon effect op exposure.
+        # Regime/orderflow is a risk input: monotonic effect on exposure.
         # bull=+0.5 -> verhoog (0..+20%), crash=-0.8 -> verlaag sterk.
         regime_mult = 1.0
         if alpha_signals:

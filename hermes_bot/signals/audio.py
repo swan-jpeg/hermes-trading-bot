@@ -74,7 +74,7 @@ class AudioAnalyzer:
         """Run fn in a thread with a timeout; on error/timeout return the default.
 
         Voorkomt dat een hangend zwaar model (bijv. emotion-pipeline op een
-        trage CPU) de hele analyse blokkeert.
+        slow CPU) blocks the whole analysis.
         """
         import threading
 
