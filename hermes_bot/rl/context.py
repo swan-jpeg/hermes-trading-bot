@@ -25,6 +25,10 @@ Category 7 — Asset/Business profile: asset-class (one-hot) + sector type,
     KIND (stock vs bond, tech vs energy, US vs EU, small vs mega) without
     needing a fixed ticker — it generalizes to any entity the impact agent
     points at.
+Category 8 — Technical indicators: rsi_14, ema_cross, momentum_10,
+    vol_20, trend_strength. Standard quant-trading features computed from
+    price history (NOT webscraping). The impact agent decides which entities
+    get analyzed; indicators are computed for exactly those.
 
 This module is the "language" between the upstream layers (impact/fusion/
 bottleneck/webscraping) and the RL model. Each layer fills the fields it
@@ -232,6 +236,13 @@ class AssetContext:
     size_class: float = 0.5              # 0=small-cap, 1=mega-cap
     volatility: float = 0.5              # 0=low-vol/defensive, 1=high-vol
 
+    # --- Category 8: Technical indicators (from price data, not webscraping) ---
+    rsi_14: float = 0.5                  # 0..1 (0.5 neutral; >0.5 momentum up)
+    ema_cross: float = 0.5               # 0..1 (0.5=flat, >0.5=bullish cross)
+    momentum_10: float = 0.5             # 0..1 (0.5=flat, >0.5=momentum up)
+    vol_20: float = 0.5                  # 0..1 (0=low vol, 1=high vol)
+    trend_strength: float = 0.0          # 0..1 (cleanliness of the trend, r^2)
+
     # --- Extra metadata (not in the observation, but for logging) ---
     entity: str = ""
     asset_class: str = ""
@@ -266,7 +277,9 @@ class AssetContext:
         "sector_industrial",
         "region_us", "region_eu", "region_jp",
         "size_class", "volatility",
-        # Portfolio/risico
+        # Category 8 — Technical indicators
+        "rsi_14", "ema_cross", "momentum_10", "vol_20", "trend_strength",
+        # Portfolio/risk
         "regime_code", "pnl", "holding_days", "allocation", "var_95", "crash_prob",
     )
 
@@ -301,12 +314,15 @@ def build_asset_context(
     fusion: dict | None = None,
     bottleneck: dict | None = None,
     source: dict | None = None,
+    indicators: dict | None = None,
     entity: str = "",
     asset_class: str = "",
 ) -> AssetContext:
     """Build an AssetContext from the outputs of the upstream layers.
 
     Each layer fills only the fields it knows; the rest stays neutral.
+    indicators: optional dict of category-8 technical indicators (see
+    hermes_bot.indicators) computed for this entity.
     """
     ctx = AssetContext(entity=entity, asset_class=asset_class)
 
@@ -359,6 +375,13 @@ def build_asset_context(
             info_freshness=source.get("freshness", 0.5),
             info_novelty=source.get("novelty", 0.0),
         )
+
+    # Category 8 — Technical indicators (from price data, not webscraping).
+    if indicators:
+        for k in ("rsi_14", "ema_cross", "momentum_10", "vol_20", "trend_strength"):
+            v = indicators.get(k)
+            if v is not None and isinstance(v, (int, float)):
+                setattr(ctx, k, float(v))
 
     # Category 7 — Asset/Business Profile. Always: asset-class one-hot encoding
     # the impact agent (stock/bond/etf/commodity). Further a fixed profile

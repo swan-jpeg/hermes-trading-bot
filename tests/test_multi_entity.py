@@ -1,8 +1,20 @@
 """Tests for multi-entity impact-agent output running separately through RL+risk."""
 from __future__ import annotations
 
+import numpy as np
+
 from hermes_bot.impact import ImpactAgent
 from hermes_bot.pipeline import Pipeline
+
+
+def _stub_closes(entity: str) -> np.ndarray:
+    """Offline deterministic price series for any entity (no network)."""
+    rng = np.random.default_rng(abs(hash(entity)) % 2**31)
+    return np.cumprod(1 + rng.normal(0.001, 0.01, 100)) * 100
+
+
+def _make_pipe() -> Pipeline:
+    return Pipeline({"closes_provider": _stub_closes})
 
 
 def test_impact_agent_multi_entity() -> None:
@@ -21,7 +33,7 @@ def test_impact_agent_multi_entity() -> None:
 
 def test_pipeline_builds_per_entity_contexts() -> None:
     """The pipeline builds one AssetContext per affected entity."""
-    pipe = Pipeline()
+    pipe = _make_pipe()
     web_inputs = [{
         "source": "government",
         "entity_id": "eu",
@@ -33,15 +45,18 @@ def test_pipeline_builds_per_entity_contexts() -> None:
     # One AssetContext per impacted entity.
     assert len(result.asset_contexts) == len(result.impacted)
     assert len(result.asset_contexts) >= 5
-    # Each context is the 60-dim observation.
+    # Category 8 indicators are populated (65 obs keys) + entity + asset_class.
     for c in result.asset_contexts:
-        assert len(c) == 62  # 60 obs keys + entity + asset_class
+        assert len(c) == 67  # 65 obs (cat 8 erbij) + entity + asset_class
         assert c["entity"]
+        for k in ("rsi_14", "ema_cross", "momentum_10", "vol_20", "trend_strength"):
+            assert k in c
+            assert 0.0 <= float(c[k]) <= 1.0
 
 
 def test_pipeline_per_entity_decisions() -> None:
     """Each affected entity gets its own decision + risk approval."""
-    pipe = Pipeline()
+    pipe = _make_pipe()
     web_inputs = [{
         "source": "government",
         "entity_id": "eu",

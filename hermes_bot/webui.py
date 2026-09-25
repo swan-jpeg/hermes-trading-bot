@@ -313,12 +313,16 @@ ARCH_SVG = """<svg id="arch" viewBox="0 0 1100 840" style="width:100%;height:aut
   {n_speech}{n_reports}{n_alerts}{n_bottleneck}
 
   <!-- ===== LAYER 3 — IMPACT AGENT ===== -->
-  <g class="arch-cap"><text x="30" y="300">LAAG 3 · IMPACT (welke instrumenten)</text></g>
-  {n_impact}
+    <g class="arch-cap"><text x="30" y="300">LAAG 3 · IMPACT (welke instrumenten)</text></g>
+    {n_impact}
 
-  <!-- ===== LAYER 4 — FUSION ===== -->
-  <g class="arch-cap"><text x="30" y="405">LAAG 4 · FUSIE (wat te kopen)</text></g>
-  {n_fusion}
+    <!-- ===== LAYER 3b — INDICATORS (impact -> welke stocks -> indicatoren) ===== -->
+    <g class="arch-cap"><text x="30" y="365">LAAG 3b · INDICATOREN (kwantitatief)</text></g>
+    {n_indicators}
+
+    <!-- ===== LAYER 4 — FUSION ===== -->
+    <g class="arch-cap"><text x="30" y="405">LAAG 4 · FUSIE (wat te kopen)</text></g></g>
+        {n_fusion}
 
   <!-- ===== LAYER 5 — DECISION + RISK CLUSTER ===== -->
   <g class="arch-cap"><text x="30" y="525">LAAG 5 · BESLUIT (RL) + RISICO-ENGINE</text></g>
@@ -343,6 +347,12 @@ ARCH_SVG = """<svg id="arch" viewBox="0 0 1100 840" style="width:100%;height:aut
   <path class="arch-edge" d="{e_bottleneck_fusion}" marker-end="url(#arrow)"/>
   <!-- impact -> fusion -->
   <path class="arch-edge" d="{e_impact_fusion}" marker-end="url(#arrow)"/>
+  <!-- impact -> indicatoren (welke stocks -> kwantitatieve indicatoren) -->
+  <path class="arch-edge data" d="{e_impact_indicators}" marker-end="url(#arrowData)"/>
+  <!-- indicatoren -> rl (categorie 8 in de observatie) -->
+  <path class="arch-edge data" d="{e_indicators_rl}" marker-end="url(#arrowData)"/>
+  <!-- impact -> monte carlo (impact-shocked MC, direct van impact agent) -->
+  <path class="arch-edge risk" d="{e_impact_mc}" marker-end="url(#arrowRisk)"/>
   <!-- fusion -> rl -->
   <path class="arch-edge" d="{e_fusion_rl}" marker-end="url(#arrow)"/>
   <!-- risk inputs -> risk engine (RISK cluster) -->
@@ -468,8 +478,21 @@ COMPONENT_INFO = {
                "entiteit een vector {entity, asset_class, sentiment, confidence} "
                "als input voor het RL-model.",
         "in": "speech · reports · alerts · (optioneel) eigen LLM",
-        "uit": "beïnvloede instrumenten → RL-model (per entiteit)",
+        "uit": "beïnvloede instrumenten → indicatoren + MC + RL-model (per entiteit)",
         "code": "hermes_bot/impact.py · impact_agent/skill/",
+    },
+    "indicators": {
+        "titel": "Indicatoren",
+        "rol": "Kwantitatieve technische indicatoren voor de beïnvloede instrumenten.",
+        "wat": "De impact agent bepaalt WELKE stocks geraakt worden; voor exact die "
+               "stocks berekent deze laag een kleine, vaste set standaard "
+               "quant-indicatoren uit prijsdata (géén webscraping): RSI-14, "
+               "EMA-crossover, 10-daags momentum, 20-daags volatiliteit en "
+               "trendsterkte. Deze gaan als categorie 8 in de RL-observatie, "
+               "zodat het model fusion + impact + markttechniek combineert.",
+        "in": "beïnvloede instrumenten (impact agent) · prijsdata",
+        "uit": "RSI · EMA · momentum · vol · trend → RL-observatie (categorie 8)",
+        "code": "hermes_bot/indicators.py · hermes_bot/market/indicators_link.py",
     },
     "fusion": {
         "titel": "Fusion Model",
@@ -587,6 +610,8 @@ def _architecture_html() -> str:
     n_bottleneck = _node("bottleneck", 670, 194, 180, 56, "B2B Bottleneck", ["supply-chain · knelpunten"], "")
     # Laag 3 · IMPACT AGENT (bepaalt welke instrumenten)
     n_impact = _node("impact", 430, 320, 220, 52, "Impact Agent", ["welke stocks · LLM-skill"], "core", "gCore")
+    # Layer 3b · INDICATORS (impact -> which stocks -> quantitative indicators)
+    n_indicators = _node("indicators", 430, 380, 220, 40, "Indicatoren", ["RSI · EMA · momentum · vol · trend"], "data", "gData")
     # Laag 4 · FUSIE (wat te kopen)
     n_fusion = _node("fusion", 430, 425, 220, 56, "Fusion Model", ["kwaliteit · zekerheid · emotie"], "core", "gCore")
     # Layer 5 · DECISION + RISK (risk cluster: inputs close to the risk engine)
@@ -615,6 +640,12 @@ def _architecture_html() -> str:
     e["e_bottleneck_fusion"] = _edge(760, 250, 560, 425, 0.5, 0.5)
     # impact -> fusion (per beïnvloede entiteit)
     e["e_impact_fusion"] = _edge(540, 372, 540, 425, 0.5, 0.4)
+    # impact -> indicators (which stocks -> quantitative indicators)
+    e["e_impact_indicators"] = _edge(540, 372, 540, 380, 0.5, 0.4)
+    # indicators -> rl (category 8 in the observation)
+    e["e_indicators_rl"] = _edge(430, 420, 235, 560, 0.5, 0.4)
+    # impact -> monte carlo (impact-shocked MC, direct from the impact agent)
+    e["e_impact_mc"] = _edge(650, 372, 880, 550, 0.5, 0.4)
     # fusion -> rl (links)
     e["e_fusion_rl"] = _edge(500, 481, 235, 560, 0.5, 0.4)
     # RISK-cluster: inputs -> risk engine (korte pijlen)
@@ -634,6 +665,7 @@ def _architecture_html() -> str:
         "n_bottleneck": n_bottleneck, "n_regional": n_regional, "n_regime": n_regime,
         "n_mc": n_mc,
         "n_impact": n_impact,
+        "n_indicators": n_indicators,
         "n_fusion": n_fusion, "n_rl": n_rl, "n_risk": n_risk,
         "n_action": n_action, "n_exec": n_exec,
     }

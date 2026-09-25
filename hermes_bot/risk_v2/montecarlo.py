@@ -98,6 +98,68 @@ class MonteCarloEngineV2:
             crash_probability=crash_probability,
         )
 
+    def simulate_with_shock(
+        self,
+        returns: np.ndarray,
+        horizon: int,
+        direction: float = 0.5,
+        magnitude: float = 0.0,
+    ) -> MonteCarloResult:
+        """Simulate paths with an impact-agent shock applied as drift.
+
+        The impact agent determines which instruments are affected and how
+        strongly (direction -1..1, magnitude 0..1). This immediately feeds the
+        Monte Carlo so the tail risk reflects the NEW event, not just past
+        history. The shock shifts the bootstrapped return distribution:
+
+            drift = (direction - 0.5) * 2 * magnitude * shock_scale
+
+        shock_scale (~0.5% per day) keeps the shock comparable to daily vol
+        while still bending the median path toward the impact direction.
+        """
+        returns_arr = np.asarray(returns, dtype=float).reshape(1, -1)
+        n_days = returns_arr.shape[1]
+        direction_signed = (direction - 0.5) * 2.0  # -1..1
+        drift = direction_signed * magnitude * 0.005
+        # Reuse block-sample logic but add drift to each daily return.
+        block = max(1, min(20, n_days // 4))
+        paths = np.zeros(self.n_paths)
+        for i in range(self.n_paths):
+            cum = 0.0
+            day = 0
+            while day < horizon:
+                start = self.rng.integers(0, n_days - block)
+                seg = returns_arr[0, start : start + block]
+                take = min(block, horizon - day)
+                cum += seg[:take].sum() + drift * take
+                day += take
+            paths[i] = cum
+
+        pct = {q: float(np.percentile(paths, q)) for q in (5, 10, 25, 50, 75, 90, 95)}
+        var_95 = float(np.percentile(paths, 5))
+        tail = paths[paths <= var_95]
+        es_95 = float(tail.mean()) if tail.size else var_95
+
+        dd = np.zeros(self.n_paths)
+        for i in range(self.n_paths):
+            idx = self.rng.integers(0, n_days, size=horizon)
+            daily = returns_arr[0, idx] + drift
+            eq = np.cumprod(1 + daily)
+            peak = np.maximum.accumulate(eq)
+            dd[i] = float(np.min(eq / peak - 1))
+        dd_pct = {q: float(np.percentile(dd, q)) for q in (50, 90, 95)}
+        crash_probability = float(np.mean(dd < -0.20))
+
+        return MonteCarloResult(
+            n_paths=self.n_paths,
+            horizon=horizon,
+            percentiles=pct,
+            var_95=var_95,
+            expected_shortfall_95=es_95,
+            max_drawdown_distribution=dd_pct,
+            crash_probability=crash_probability,
+        )
+
     def stress_scenarios(self, current_portfolio: dict, scenarios: dict) -> dict:
         """Test the current portfolio against crash scenarios."""
         out: dict[str, float] = {}

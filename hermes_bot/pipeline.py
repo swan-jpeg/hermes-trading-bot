@@ -28,10 +28,13 @@ from hermes_bot.expansions import (
 )
 from hermes_bot.fusion import WeightedFusion
 from hermes_bot.impact import ImpactAgent, LLMImpactAgent
+from hermes_bot.market.indicators_link import entity_indicators as _ei
+from hermes_bot.market.indicators_link import impact_shocked_mc as _mc
 from hermes_bot.portfolio import PortfolioState
 from hermes_bot.risk_v2.montecarlo import MonteCarloEngineV2
 from hermes_bot.risk_v2_1 import RiskEngineV21
 from hermes_bot.rl.context import AssetContext, build_asset_context
+from hermes_bot.schemas import MonteCarloResult
 
 
 @dataclass
@@ -170,6 +173,11 @@ class Pipeline:
         else:
             self.impact_agent = ImpactAgent()
         self.portfolio = PortfolioState(cash=100_000.0)
+        # Price/indicator data source. Defaults to lazy yfinance; tests inject
+        # a stub so the chain runs offline.
+        from hermes_bot.market.indicators_link import fetch_closes
+        self.closes_provider = self.cfg.get("closes_provider") or fetch_closes
+        self._closes_cache: dict[str, object] = {}
 
     def run(
         self,
@@ -235,7 +243,15 @@ class Pipeline:
         #     Impact-vector (categorie 1) + fusion (categorie 4) + bottleneck
         #     (category 5) + source info (category 2). This is what the RL model
         #     per asset ziet.
+        # 3c. IMPACT-AGENT -> INDICATORS + IMPACT-SHOCKED MC.
+        #     The impact agent chose which entities; for exactly those we
+        #     compute Category-8 technical indicators (price data, not
+        #     webscraping) and a Monte Carlo whose drift reflects the impact
+        #     vector. Offline (backtest/replay), closes_provider is stubbed so
+        #     the chain never needs a network call.
         asset_contexts: list[AssetContext] = []
+        indicators_by_entity: dict[str, dict] = {}
+        entity_mc: dict[str, MonteCarloResult] = {}
         for item in impacted:
             entity = item.get("entity", "")
             if not entity:
@@ -247,11 +263,27 @@ class Pipeline:
             ent_bn = next((i for i in bottleneck_inputs if i.get("entity_id") == entity), None)
             # Source info: from the original web input that this entity relates to.
             src = next((i for i in inputs if i.get("entity_id") == entity), None)
+            # Closing prices (cached) -> indicators + impact MC for this entity.
+            closes = None
+            if entity in self._closes_cache:
+                closes = self._closes_cache[entity]
+            else:
+                try:
+                    closes = self.closes_provider(entity)
+                except Exception:
+                    closes = None
+                self._closes_cache[entity] = closes
+            ind = _ei(entity, closes)
+            indicators_by_entity[entity] = ind
+            vec = impact_vectors.get(entity, item)
+            entity_mc[entity] = _mc(
+                closes, vec.get("direction", 0.5), vec.get("magnitude", 0.0))
             ctx = build_asset_context(
-                impact=impact_vectors.get(entity, item),
+                impact=vec,
                 fusion=ent_fused.model_dump() if hasattr(ent_fused, "model_dump") else ent_fused,
                 bottleneck=ent_bn,
                 source=src,
+                indicators=ind,
                 entity=entity,
                 asset_class=item.get("asset_class", ""),
             )
@@ -295,8 +327,13 @@ class Pipeline:
                 zekerheid=ent_conf, rationale="pipeline-integrated",
                 timestamp=datetime.now(UTC), exit_reason=ExitReason.NONE,
             )
+            # Per-entity impact-shocked MC (direct from the impact agent);
+            # fall back to the portfolio MC only if the entity has no prices.
+            ent_mc = entity_mc.get(ent) if entity_mc else None
+            mc_for_entity = ent_mc or mc
             exposure, breakdown = self.risk.approve(
-                decision, self.portfolio, equity, mc, alpha_signals=alpha_signals)
+                decision, self.portfolio, equity, mc_for_entity,
+                alpha_signals=alpha_signals)
             decisions.append(decision.model_dump())
             exposures.append(round(exposure, 4))
         # Primary decision = the first (or market-level) one for the result.
