@@ -31,7 +31,7 @@ from hermes_bot.impact import ImpactAgent, LLMImpactAgent
 from hermes_bot.market.indicators_link import entity_indicators as _ei
 from hermes_bot.market.indicators_link import impact_shocked_mc as _mc
 from hermes_bot.portfolio import PortfolioState
-from hermes_bot.risk_v2.montecarlo import MonteCarloEngineV2
+from hermes_bot.risk_v2.montecarlo import DEFAULT_SCENARIOS, MonteCarloEngineV2
 from hermes_bot.risk_v2_1 import RiskEngineV21
 from hermes_bot.rl.context import AssetContext, build_asset_context
 from hermes_bot.schemas import MonteCarloResult
@@ -54,6 +54,10 @@ class PipelineResult:
     decisions: list[dict] = field(default_factory=list)  # per-entiteit RL/risk-output
     exposures: list[float] = field(default_factory=list)
     asset_contexts: list[dict] = field(default_factory=list)  # per-entiteit RL-input
+    # Monte Carlo of this cycle ([[08]]): paths, VaR/ES, crash probability, model.
+    monte_carlo: dict = field(default_factory=dict)
+    # Crash scenarios forced on the approved portfolio ([[08]] point 3).
+    scenario_stress: dict = field(default_factory=dict)
 
 
 def collect_web_inputs(
@@ -340,7 +344,25 @@ class Pipeline:
         decision = RLRawDecision(**decisions[0]) if decisions else None
         exposure = exposures[0] if exposures else 0.0
 
-        # 5. Return bottleneck ratings (for logging/attribution).
+        # 5. Monte Carlo summary + forced crash scenarios ([[08]]).
+        #    The scenario stress runs on the APPROVED portfolio, so the crash
+        #    sensitivity of the decision itself is visible (not only the
+        #    VaR/crash probability from history).
+        primary_mc = next((entity_mc[e] for e in entities if e in entity_mc), None) or mc
+        mc_summary = {
+            "model": primary_mc.model if primary_mc else "",
+            "n_paths": primary_mc.n_paths if primary_mc else 0,
+            "var_95": round(primary_mc.var_95, 4) if primary_mc else 0.0,
+            "es_95": round(primary_mc.expected_shortfall_95, 4) if primary_mc else 0.0,
+            "crash_probability": round(primary_mc.crash_probability, 4) if primary_mc else 0.0,
+            "drawdown_95": (round(primary_mc.max_drawdown_distribution.get(95, 0.0), 4)
+                            if primary_mc else 0.0),
+            "scenario_table": primary_mc.scenario_table if primary_mc else {},
+        }
+        holdings = {ent: exp for ent, exp in zip(entities, exposures, strict=False) if exp > 0}
+        scenario_stress = self.mc.stress_scenarios(holdings, DEFAULT_SCENARIOS)
+
+        # 6. Return bottleneck ratings (for logging/attribution).
         ratings = {
             i["entity_id"]: round(i["bottleneck_score"], 4)
             for i in bottleneck_inputs if "bottleneck_score" in i
@@ -359,6 +381,8 @@ class Pipeline:
             decisions=decisions,
             exposures=exposures,
             asset_contexts=[c.to_dict() for c in asset_contexts],
+            monte_carlo=mc_summary,
+            scenario_stress=scenario_stress,
         )
 
     def record_equity(self, equity: float) -> None:

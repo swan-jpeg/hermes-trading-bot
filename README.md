@@ -141,7 +141,9 @@ hermes_bot/
 ├── agents/          # LAYER 4: fundamental AI agent
 ├── fusion/          # LAYER 5: fusion model (quality/certainty/emotion)
 ├── rl/              # LAYER 6: RL decision (env, reward, policy)
-├── simulation/      # LAYER 6: Monte Carlo (bootstrap, scenarios, metrics)
+├── risk_v2/         # LAYER 6: Monte Carlo engine (bootstrap/GBM/jump-diffusion/regime,
+│                    #          gaussian/t copulas, forced crash scenarios, bootstrap CI)
+├── simulation/      # LAYER 6: deprecated shim → risk_v2/montecarlo.py
 ├── risk/            # LAYER 6: risk engine (sizing, drawdown, stress, hedging)
 ├── portfolio/       # allocation across asset classes (multi-asset)
 ├── execution/       # LAYER 7: output action → broker (paper/live)
@@ -156,6 +158,40 @@ hermes_bot/
 3. **Decision ≠ execution**: log intent and real fills.
 4. **Verify every order** with the broker.
 5. **Backtest before money, paper before live.**
+
+## Monte Carlo — the risk route (layer 6)
+
+One engine: `hermes_bot/risk_v2/montecarlo.py::MonteCarloEngineV2`
+(`hermes_bot/simulation/` is only a compatibility shim). VaR95, expected
+shortfall, the drawdown distribution and the crash probability are all computed
+from the **same simulated paths** (no look-ahead, seeded and reproducible).
+
+- **Path models** — `bootstrap` (block bootstrap of the history: keeps
+  autocorrelation and crash clustering), `gbm`, `jump_diffusion` (Poisson jumps,
+  intensity/size estimated from the history) and `regime` (2-state Markov
+  volatility regime with empirically estimated transition probabilities).
+- **Dependency** — Cholesky correlation for multi-asset, or a `gaussian` / `t`
+  copula on the empirical marginals. The t-copula adds tail dependence: assets
+  crash *together*.
+- **Impact shock** — `simulate_with_shock(direction, magnitude)` bends the paths
+  toward the impact-agent's view (per asset, if given as an array).
+- **Forced crash scenarios** — `stress_scenarios(portfolio)` against
+  `DEFAULT_SCENARIOS` (2008, correlation spike, flash crash, rate shock, ...).
+  Weights are portfolio fractions, so a 60%-invested book takes 60% of the
+  shock (cash is untouched). The pipeline stores it as `scenario_stress`, the
+  backtest as `BacktestResult.scenario_stress` and the engine returns it in
+  `MonteCarloResult.scenario_table`.
+- **Backtest uncertainty** — `bootstrap_ci(returns)` resamples the same history
+  in blocks and reports 95% confidence intervals for mean/Sharpe/max drawdown;
+  the /backtest page shows them under "Backtest uncertainty".
+
+```python
+from hermes_bot.risk_v2.montecarlo import MonteCarloEngineV2
+
+mc = MonteCarloEngineV2(seed=42, n_paths=10_000, model="jump_diffusion", copula="t")
+r = mc.simulate(returns, horizon=60, portfolio={"NVDA": 0.10, "TLT": 0.05})
+print(r.var_95, r.expected_shortfall_95, r.crash_probability, r.scenario_table)
+```
 
 ## Windows / GitHub
 

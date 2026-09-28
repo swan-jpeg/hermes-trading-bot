@@ -51,7 +51,7 @@ Deze onderdelen zijn **al geïmplementeerd en getest** (12 tests groen). **Niet 
 | `portfolio/` | `PortfolioState` (posities met entry-prijs), `PortfolioAllocator` — klaar |
 | `rl/` | `RulePolicy` (prijs-bewust: take-profit/stop-loss/trailing), `RLFusionModel`, `compute_reward` — klaar |
 | `risk/` | `RiskEngine.approve()` met Monte Carlo-begrenzing + exit-altijd-goedkeuring — klaar |
-| `simulation/` | `MonteCarloEngine` (bootstrap, VaR95, ES95, drawdown, crash-kans) — klaar |
+| `simulation/` | deprecated shim → `risk_v2/montecarlo.py::MonteCarloEngineV2` (bootstrap/GBM/jump-diffusion/regime, copulas, crash-scenario's, bootstrap-CI) — klaar |
 | `execution/` | `PaperBroker`, `ExecutionEngine` (fail-closed) — klaar |
 | `agents/` | `FundamentalAgent` (regelsgebaseerde scores) — klaar |
 | `fusion/` | `WeightedFusion` — klaar |

@@ -17,9 +17,9 @@ from hermes_bot.expansions import BottleneckAnalyzer, RegimeDetector
 from hermes_bot.fusion import WeightedFusion
 from hermes_bot.portfolio import PortfolioState
 from hermes_bot.risk import RiskEngine
+from hermes_bot.risk_v2.montecarlo import MonteCarloEngineV2
 from hermes_bot.rl import RLFusionModel
 from hermes_bot.schemas import Position
-from hermes_bot.simulation import MonteCarloEngine
 
 
 def run_demo() -> dict:
@@ -45,12 +45,13 @@ def run_demo() -> dict:
     ]
     fusion = WeightedFusion().fuse(inputs)
 
-    # 2. Monte Carlo (historische rendementen simuleren).
+    # 2. Monte Carlo (simulate historical returns).
     import numpy as np
 
     rng = np.random.default_rng(7)
-    hist = rng.normal(0.0005, 0.02, 250)  # ~250 dagen historie
-    mc = MonteCarloEngine(n_paths=5000).simulate(hist, horizon=30)
+    hist = rng.normal(0.0005, 0.02, 250)  # ~250 days of history
+    mc = MonteCarloEngineV2(n_paths=5000).simulate(
+        hist, horizon=30, portfolio={"AAPL": 0.10})
 
     # 3. RL decision (price-aware: sees the position + profit -> take-profit).
     rl = RLFusionModel()
@@ -89,7 +90,9 @@ def run_demo() -> dict:
                      "pnl_pct": round(pos.unrealized_pnl_pct(current_price), 4)},
         "fusion": fusion.model_dump(),
         "monte_carlo": {"var_95": round(mc.var_95, 4), "es_95": round(mc.expected_shortfall_95, 4),
-                        "crash_prob": round(mc.crash_probability, 4)},
+                        "crash_prob": round(mc.crash_probability, 4), "model": mc.model,
+                        "drawdown_95": round(mc.max_drawdown_distribution.get(95, 0.0), 4),
+                        "scenarios": mc.scenario_table},
         "rl_decision": decision.model_dump(),
         "risk_approval": approval.model_dump(),
         "fills": fills,

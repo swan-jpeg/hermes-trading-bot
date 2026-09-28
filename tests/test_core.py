@@ -5,8 +5,8 @@ from datetime import UTC, datetime
 
 from hermes_bot.portfolio import PortfolioState
 from hermes_bot.risk import RiskEngine
+from hermes_bot.risk_v2.montecarlo import MonteCarloEngineV2
 from hermes_bot.schemas import Action, ExitReason, Position, RLRawDecision
-from hermes_bot.simulation import MonteCarloEngine
 
 
 def _config() -> dict:
@@ -58,7 +58,7 @@ def test_risk_engine_monte_carlo_reduces_alloc() -> None:
     eng = RiskEngine(_config())
     # Low vol -> allocation unchanged but MC fields filled.
     hist = np.random.default_rng(1).normal(0, 0.005, 250)
-    mc = MonteCarloEngine(seed=1, n_paths=2000).simulate(hist, horizon=30)
+    mc = MonteCarloEngineV2(seed=1, n_paths=2000).simulate(hist, horizon=30)
     r = eng.approve(_decision("AAPL", Action.BUY, 0.10), PortfolioState(), mc)
     assert r.target_alloc["AAPL"] <= 0.10
     assert r.var_95 != 0.0
@@ -66,7 +66,7 @@ def test_risk_engine_monte_carlo_reduces_alloc() -> None:
 
     # High vol -> VaR95 well below the -5% threshold -> allocation must shrink.
     hist_high = np.random.default_rng(2).normal(0, 0.06, 250)
-    mc_high = MonteCarloEngine(seed=2, n_paths=4000).simulate(hist_high, horizon=30)
+    mc_high = MonteCarloEngineV2(seed=2, n_paths=4000).simulate(hist_high, horizon=30)
     r_high = eng.approve(_decision("AAPL", Action.BUY, 0.10), PortfolioState(), mc_high)
     assert mc_high.var_95 < -0.05  # bevestig dat de drempel overschreden wordt
     assert r_high.target_alloc["AAPL"] < 0.10  # begrensd door MC

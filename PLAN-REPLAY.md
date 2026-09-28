@@ -80,7 +80,7 @@ De webscraping wordt GESIMULEERD alsof het live is: op elke historische dag
 ### 7. End-to-end test van de hele keten
 - Test dat webscraping → impact → fusion → RL → risk → Monte Carlo allemaal
   draait met de replay-data.
-- Monte Carlo: gebruik `MonteCarloEngineV2` (al in risk_v2/montecarlo.py).
+- Monte Carlo: gebruik `MonteCarloEngineV2` (enige motor in risk_v2/montecarlo.py; modellen, copulas, crash-scenario's, bootstrap-CI).
 - Risk engine: `RiskEngineV21` (al in risk_v2_1/__init__.py).
 
 ## Harde regels

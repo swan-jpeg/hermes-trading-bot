@@ -155,3 +155,7 @@ class MonteCarloResult(BaseModel):
     expected_shortfall_95: float
     max_drawdown_distribution: dict[int, float]
     crash_probability: float = Field(ge=0.0, le=1.0)
+    # Padding model that was used in the simulation (bootstrap | gbm | jump_diffusion | regime).
+    model: str = "bootstrap"
+    # Crash-scenario's forceren ([[08]] punt 3): scenario-naam -> portefeuille-rendement.
+    scenario_table: dict[str, float] = Field(default_factory=dict)

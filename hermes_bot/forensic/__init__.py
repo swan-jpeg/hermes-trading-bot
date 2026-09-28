@@ -23,8 +23,8 @@ import pandas as pd
 from hermes_bot.config import load_config
 from hermes_bot.portfolio import PortfolioState
 from hermes_bot.risk import RiskEngine
+from hermes_bot.risk_v2.montecarlo import MonteCarloEngineV2
 from hermes_bot.schemas import ExitReason, Position, RLRawDecision
-from hermes_bot.simulation import MonteCarloEngine
 
 warnings.filterwarnings("ignore")
 
@@ -183,7 +183,7 @@ def run_forensic(
     turnover = 0.0
     costs = 0.0
     cash_days = 0
-    mc_engine = MonteCarloEngine(seed=seed, n_paths=2000)
+    mc_engine = MonteCarloEngineV2(seed=seed, n_paths=2000)
 
     closes = prices["close"].to_numpy(dtype=float)
     idx_list = prices.index.tolist()

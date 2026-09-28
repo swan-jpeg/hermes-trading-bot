@@ -517,11 +517,16 @@ COMPONENT_INFO = {
     "mc": {
         "titel": "Monte Carlo",
         "rol": "Simulates thousands of market paths for risk.",
-        "wat": "Bootstraps per-day market paths to estimate VaR95, Expected Shortfall (ES95) and "
-               "crash probability. This feeds the risk engine with "
-               "tail-risk information.",
-        "in": "historical returns",
-        "uit": "VaR95 · ES95 · crash probability → risk engine",
+        "wat": "Simulates real daily paths (block bootstrap, GBM, jump-diffusion or a "
+               "2-state regime model) and estimates VaR95, Expected Shortfall (ES95), the "
+               "drawdown distribution and the crash probability from those same paths. "
+               "Multi-asset dependency goes via Cholesky correlation or a gaussian/t copula "
+               "(tail dependence: assets crashing together). It also forces crash scenarios "
+               "(2008, correlation spike, flash crash) on the current portfolio and gives "
+               "block-bootstrap confidence intervals of a backtest. This feeds the risk "
+               "engine with tail-risk information.",
+        "in": "historical returns · impact-agent shock (direction/magnitude)",
+        "uit": "VaR95 · ES95 · drawdown95 · crash probability · scenario table → risk engine",
         "code": "hermes_bot/risk_v2/montecarlo.py",
     },
     "risk": {
@@ -771,6 +776,44 @@ def _backtest_result_html(data: dict) -> str:
   <span class="legend-item bench"><span class="swatch"></span>Buy-and-hold</span>
 </div>"""
 
+    # Monte Carlo ([[08]]): crash-scenario's forceren + backtest-onzekerheid.
+    scen = data.get("scenario_stress") or {}
+    ci = data.get("confidence_intervals") or {}
+    mc_html = ""
+    if scen:
+        rows = "".join(
+            f'<tr><td>{html.escape(str(name))}</td>'
+            f'<td style="text-align:right">{v*100:+.1f}%</td></tr>'
+            for name, v in sorted(scen.items(), key=lambda kv: kv[1])
+        )
+        mc_html += (
+            "<div class=\"card\"><h3>Crash scenarios (forced)</h3>"
+            "<p style=\"font-size:13px;color:var(--muted);margin-top:0\">End-of-backtest "
+            f"exposure: {data.get('final_exposure', 0.0)*100:.0f}%.</p>"
+            "<table style=\"width:100%;border-collapse:collapse;font-size:14px\">"
+            "<thead><tr><th style=\"text-align:left\">Scenario</th>"
+            "<th style=\"text-align:right\">Portfolio return</th></tr></thead>"
+            f"<tbody>{rows}</tbody></table>"
+            "<p style=\"font-size:12px;color:var(--muted)\">Forced market shocks (2008, "
+            "correlation spike, flash crash, ...) applied to the final allocation.</p></div>"
+        )
+    if ci:
+        def _ci(stat: str) -> str:
+            d = ci.get(stat) or {}
+            return (f"{d.get('low', 0.0):.3f} … {d.get('high', 0.0):.3f} "
+                    f"(point {d.get('point', 0.0):.3f})")
+
+        mc_html += (
+            "<div class=\"card\"><h3>Backtest uncertainty (block-bootstrap, 95% CI)</h3>"
+            "<table style=\"width:100%;border-collapse:collapse;font-size:14px\">"
+            f"<tr><td>Mean daily return</td><td style=\"text-align:right\">{_ci('mean')}</td></tr>"
+            f"<tr><td>Sharpe (annualised)</td><td style=\"text-align:right\">{_ci('sharpe')}</td></tr>"
+            f"<tr><td>Max drawdown</td><td style=\"text-align:right\">{_ci('max_drawdown')}</td></tr>"
+            "</table><p style=\"font-size:12px;color:var(--muted)\">Resampling the same history "
+            "in blocks (keeps autocorrelation/crashes): if the interval straddles zero, the "
+            "result rests on one lucky path.</p></div>"
+        )
+
     return f"""
 <div class="card">
   <h3>Result — {html.escape(data['symbol'])} ({html.escape(data['period'])})</h3>
@@ -793,6 +836,7 @@ def _backtest_result_html(data: dict) -> str:
   {svg}
   <p style="font-size:12px;color:var(--muted)">{len(ts)} data points plotted. Download via the button in the nav.</p>
 </div>
+{mc_html}
 """
 
 

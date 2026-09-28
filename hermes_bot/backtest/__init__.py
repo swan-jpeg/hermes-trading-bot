@@ -18,9 +18,9 @@ import numpy as np
 import pandas as pd
 
 from hermes_bot.portfolio import PortfolioState
+from hermes_bot.risk_v2.montecarlo import MonteCarloEngineV2
 from hermes_bot.rl import RulePolicy
 from hermes_bot.schemas import ExitReason, MonteCarloResult, Position, RLRawDecision
-from hermes_bot.simulation import MonteCarloEngine
 
 from .metrics import BacktestResult
 
@@ -176,7 +176,7 @@ class Backtester:
 
     def _mc_from_returns(self, returns: np.ndarray) -> MonteCarloResult | None:
         try:
-            return MonteCarloEngine(seed=42, n_paths=2000).simulate(returns, horizon=20)
+            return MonteCarloEngineV2(seed=42, n_paths=2000).simulate(returns, horizon=20)
         except Exception:
             return None
 
@@ -298,6 +298,19 @@ class Backtester:
         wins = sum(1 for tr in closed_trades if tr.exit_price > tr.entry_price)
         win_rate = wins / len(closed_trades) if closed_trades else 0.0
 
+        # ---- Monte Carlo: crash scenarios + confidence intervals ([[08]]) ----
+        # Scenario-stress on the ENDPOINT of this backtest, so the crash
+        # sensitivity of the strategy itself is measurable (not only the
+        # drawdown that has already occurred).
+        final_value = float(equity[-1]) if equity else initial_capital
+        final_exposure = (qty * float(closes[-1]) / final_value) if final_value > 0 else 0.0
+        mc_engine = MonteCarloEngineV2(seed=42, n_paths=2000)
+        label = str(strategy.cfg.get("entity", "asset"))
+        scenario_stress = mc_engine.stress_scenarios({label: final_exposure})
+        confidence_intervals = (
+            mc_engine.bootstrap_ci(rets, n_resamples=1000) if rets.size > 2 else {}
+        )
+
         return BacktestResult(
             initial_capital=initial_capital,
             final_capital=float(equity[-1]) if equity else initial_capital,
@@ -316,6 +329,9 @@ class Backtester:
             annualized_return=(
                 (1 + total_return) ** (252.0 / max(1, len(equity))) - 1 if equity else 0.0
             ),
+            final_exposure=final_exposure,
+            scenario_stress=scenario_stress,
+            confidence_intervals=confidence_intervals,
         )
 
 

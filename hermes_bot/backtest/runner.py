@@ -68,6 +68,11 @@ def run_backtest(
         "equity": equity,
         "benchmark": bench,
         "timestamps": tx,
+        # Monte Carlo ([[08]]): crash scenarios on final exposure +
+        # bootstrap confidence intervals of the strategy.
+        "final_exposure": round(r.final_exposure, 4),
+        "scenario_stress": r.scenario_stress,
+        "confidence_intervals": r.confidence_intervals,
     }
 
 
