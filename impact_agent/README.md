@@ -96,3 +96,13 @@ Every affected entity gets a vector the RL model uses:
 
 The RL model sees per stock the sentiment, confidence and quality, and decides
 whether to buy, hold or sell.
+
+## Concept — catalog + RAG (design only, not built)
+
+`DESIGN-catalog-rag.md` describes the next step for this layer: replace the model's
+*guessing* of which instrument an event hits with a **deterministic catalog** (instruments,
+entities, relations, themes, regions) plus **RAG context injection**, so the LLM only
+assigns sentiment/confidence on a grounded candidate set. It covers the full database
+schema, the `impact = theme × region × relation-distance` principle, and the weekly
+curator loop that keeps the catalog current. Nothing there is implemented yet — it is the
+design to review first.
