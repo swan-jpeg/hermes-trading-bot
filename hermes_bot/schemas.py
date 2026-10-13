@@ -1,10 +1,11 @@
 """Shared schemas (pydantic) for all modules — the 'language' between layers."""
 from __future__ import annotations
 
+import math
 from datetime import date, datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class Action(StrEnum):
@@ -336,6 +337,8 @@ _DOC_ID_RE = r"^doc_[0-9a-f]{64}$"
 _EDGE_ID_RE = r"^edg_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 _DEC_ID_RE = r"^dec_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 _SHA256_RE = r"^[0-9a-f]{64}$"
+_CHK_ID_RE = r"^chk_[0-9a-f]{64}$"
+_EMB_ID_RE = r"^emb_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 
 
 class EntityType(StrEnum):
@@ -556,3 +559,91 @@ class DecisionRecord(BaseModel):
     reason_codes: list[str] = Field(default_factory=list)
     approval_id: str | None = None
     created_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Document chunking and retrieval contracts (execution package §4.3 / §4.4)
+# ---------------------------------------------------------------------------
+# Chunk metadata carries exact source offsets so every retrieval hit can be
+# traced back to the original document text.  Embedding metadata is versioned
+# and partitioned so incompatible models can never share an index.
+
+
+class EmbeddingTask(StrEnum):
+    """Allowed retrieval tasks (§4.4)."""
+
+    DOCUMENT_RETRIEVAL = "document_retrieval"
+
+
+class ObjectType(StrEnum):
+    """Object types that may be embedded (§4.4)."""
+
+    DOCUMENT = "document"
+    CHUNK = "chunk"
+    ENTITY = "entity"
+    EVENT = "event"
+    RELATION = "relation"
+
+
+class SimilarityMetric(StrEnum):
+    """Supported similarity metrics (§4.4)."""
+
+    COSINE = "cosine"
+
+
+class Chunk(BaseModel):
+    """Document chunk with exact source offsets (§4.3)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    chunk_id: str = Field(pattern=_CHK_ID_RE)
+    document_id: str = Field(pattern=_DOC_ID_RE)
+    chunker_version: str = Field(min_length=1)
+    start_offset: int = Field(ge=0)
+    end_offset: int = Field(ge=0)
+    text: str = Field(min_length=1)
+    section: str | None = None
+    speaker_id: str | None = None
+    time_start_ms: int | None = None
+    time_end_ms: int | None = None
+    metadata: dict[str, object] = Field(default_factory=dict)
+    created_at: datetime
+
+
+class EmbeddingRecord(BaseModel):
+    """Embedding metadata and vector for one object (§4.4).
+
+    The vector is stored as a plain float list so the record remains JSON
+    serializable.  The provider and index validate dimension, finiteness and
+    normalization at runtime.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    embedding_id: str = Field(pattern=_EMB_ID_RE)
+    object_id: str = Field(min_length=1)
+    object_type: ObjectType
+    task: EmbeddingTask = EmbeddingTask.DOCUMENT_RETRIEVAL
+    model_id: str = Field(min_length=1)
+    model_revision: str = Field(min_length=1)
+    tokenizer_revision: str = Field(min_length=1)
+    dimension: int = Field(gt=0)
+    preprocessing_version: str = Field(min_length=1)
+    chunker_version: str | None = None
+    normalized: bool = False
+    similarity_metric: SimilarityMetric = SimilarityMetric.COSINE
+    created_at: datetime
+    vector_checksum: str = Field(pattern=_SHA256_RE)
+    vector: list[float]
+    available_at: datetime
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _check_vector(self) -> EmbeddingRecord:
+        if len(self.vector) != self.dimension:
+            raise ValueError(
+                f"vector length {len(self.vector)} != dimension {self.dimension}"
+            )
+        if not all(math.isfinite(v) for v in self.vector):
+            raise ValueError("vector must contain only finite values")
+        return self
