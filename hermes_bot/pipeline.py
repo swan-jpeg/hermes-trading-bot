@@ -29,7 +29,7 @@ from hermes_bot.expansions import (
     RegionalScorer,
 )
 from hermes_bot.fusion import WeightedFusion
-from hermes_bot.impact import ImpactAgent, LLMImpactAgent
+from hermes_bot.impact import build_impact_agent
 from hermes_bot.market.indicators_link import entity_indicators as _ei
 from hermes_bot.market.indicators_link import impact_shocked_mc as _mc
 from hermes_bot.portfolio import PortfolioState
@@ -234,12 +234,9 @@ class Pipeline:
             # Convert deprecated alias to new name for backwards compatibility
             # This is needed for the future compatibility requirement in the task
             pass  # The v2.1 engine uses max_sector_weight, it will be handled there later
-        # Impact agent: keyword matching, or with LLM interpretation as config that asks for it.
-        if self.cfg.get("impact_use_llm"):
-            self.impact_agent = LLMImpactAgent(
-                model=self.cfg.get("impact_llm_model", "meta-llama/llama-3.1-8b-instruct:free"))
-        else:
-            self.impact_agent = ImpactAgent()
+        # Impact agent: deterministic, evidence-linked by default.  Callers can
+        # inject a pre-built agent or configuration (rules/catalog/graph).
+        self.impact_agent = self.cfg.get("impact_agent") or build_impact_agent(self.cfg)
         self.portfolio = PortfolioState(cash=100_000.0)
         # Price/indicator data source. Defaults to lazy yfinance; tests inject
         # a stub so the chain runs offline.
