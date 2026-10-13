@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Action(StrEnum):
@@ -159,3 +159,113 @@ class MonteCarloResult(BaseModel):
     model: str = "bootstrap"
     # Crash-scenario's forceren ([[08]] punt 3): scenario-naam -> portefeuille-rendement.
     scenario_table: dict[str, float] = Field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Whole-portfolio risk approval contract (execution package, contracts §4.6)
+# ---------------------------------------------------------------------------
+# These models implement the deterministic, portfolio-level v2.1 risk approval.
+# They are long-only MVP: target weights are NAV fractions in [0, 1]. They do
+# NOT by themselves authorize execution — a later task wires order intents.
+
+
+class RiskStatus(StrEnum):
+    """Outcome of a whole-portfolio risk approval."""
+
+    APPROVED = "approved"
+    REDUCED = "reduced"
+    REJECTED = "rejected"
+    PAUSED = "paused"
+
+
+class RiskTargetPosition(BaseModel):
+    """One proposed target position inside a portfolio risk request (§4.6).
+
+    ``target_weight`` is a NAV fraction; long-only MVP requires ``[0, 1]``.
+    Price freshness is proven either explicitly via ``is_price_fresh`` or
+    derived from ``price_available_at`` vs the request ``as_of``.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    instrument_id: str
+    target_weight: float
+    price_available_at: datetime | None = None
+    price_source_id: str | None = None
+    # Explicit freshness flag: True = fresh, False = stale. None = derive from
+    # price_available_at. A required price that is neither explicit-fresh nor
+    # backed by a timestamp is treated as missing.
+    is_price_fresh: bool | None = None
+    sector_id: str | None = None
+    decision_time: datetime | None = None
+    strategy_id: str | None = None
+    strategy_version: str | None = None
+    input_record_ids: list[str] = Field(default_factory=list)
+    reason_codes: list[str] = Field(default_factory=list)
+
+
+class RiskRequest(BaseModel):
+    """Complete target portfolio for one decision cycle (§4.6).
+
+    ``current_weights`` and ``proposed_positions`` are NAV fractions. All
+    timestamps must be timezone-aware UTC. ``constraints_version`` identifies
+    the immutable config under which the approval is granted.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    request_id: str
+    as_of: datetime
+    nav: float
+    cash_weight: float
+    current_weights: dict[str, float] = Field(default_factory=dict)
+    proposed_positions: list[RiskTargetPosition] = Field(default_factory=list)
+    constraints_version: str
+    # Optional per-source max age in seconds. For OFFLINE_MOCK fixtures this
+    # is left None: freshness is then only fixture available_at <= as_of.
+    max_stale_seconds: float | None = None
+    # Optional known-instrument universe; an ID outside it is "unknown".
+    universe_ids: list[str] | None = None
+    # Long-only MVP: short/margin requests are unsupported and rejected.
+    allow_short: bool = False
+    allow_margin: bool = False
+    reason_codes: list[str] = Field(default_factory=list)
+
+
+class RiskCheck(BaseModel):
+    """A single per-constraint check inside an approval result (§4.6)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    constraint: str
+    passed: bool
+    observed: float | None = None
+    limit: float | None = None
+    reason_code: str = ""
+
+
+class RiskApprovalResult(BaseModel):
+    """Immutable whole-portfolio approval (§4.6).
+
+    The only object that may later seed order intents. ``approved_targets`` is
+    the complete approved target map (every proposed instrument, zeros for
+    unapproved/rejected ones). ``request_hash`` is the canonical SHA-256 of
+    the serialized request including the constraints version.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    approval_id: str
+    request_hash: str
+    status: RiskStatus
+    approved_targets: dict[str, float]
+    checks: list[RiskCheck] = Field(default_factory=list)
+    reason_codes: list[str] = Field(default_factory=list)
+    created_at: datetime
+    expires_at: datetime
+    constraints_version: str
+
+    @property
+    def executable(self) -> bool:
+        """True only when the approval authorizes a target map."""
+        return self.status in (RiskStatus.APPROVED, RiskStatus.REDUCED)

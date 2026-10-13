@@ -5,7 +5,7 @@ risk budget matrix, emergency brake, recovery engine, effectieve exposure.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 
 import numpy as np
 
@@ -17,7 +17,14 @@ from hermes_bot.risk_v2_1.scores import (
     risk_budget_from_scores,
     state_label,
 )
-from hermes_bot.schemas import Action, ExitReason, RLRawDecision
+from hermes_bot.schemas import (
+    Action,
+    ExitReason,
+    RiskRequest,
+    RiskStatus,
+    RiskTargetPosition,
+    RLRawDecision,
+)
 
 
 def _engine(**overrides) -> RiskEngineV21:
@@ -178,3 +185,246 @@ def test_regional_score_adds_opportunity() -> None:
                           corr=0.1, alpha_signals={"regional_score": 0.9})
     assert hi > lo, "hogere regionale score moet meer opportunity geven"
     assert "regional_score" in bd_hi["alpha_signals"]
+
+
+# ===========================================================================
+# T01 — whole-portfolio v2.1 approval (§4.6): deterministic hard limits
+# ===========================================================================
+AS_OF = datetime(2026, 10, 13, 12, 0, tzinfo=UTC)
+
+
+def _pf_limits(**overrides) -> dict:
+    base = {
+        "max_asset_weight": 0.10,
+        "max_gross_exposure": 1.00,
+        "max_leverage": 0.0,
+        "min_cash_weight": 0.0,
+        "max_position_count": 8,
+    }
+    base.update(overrides)
+    return {"risk": base}
+
+
+def _pf_engine(**overrides) -> RiskEngineV21:
+    return RiskEngineV21(_pf_limits(**overrides), clock=lambda: AS_OF)
+
+
+def _pos(
+    iid: str,
+    weight: float,
+    available: datetime | None = AS_OF,
+    fresh: bool | None = None,
+    sector: str | None = None,
+) -> RiskTargetPosition:
+    return RiskTargetPosition(
+        instrument_id=iid,
+        target_weight=weight,
+        price_available_at=available,
+        is_price_fresh=fresh,
+        sector_id=sector,
+    )
+
+
+def _req(positions, **overrides) -> RiskRequest:
+    kw = {
+        "request_id": "req-1",
+        "as_of": AS_OF,
+        "nav": 1_000_000.0,
+        "cash_weight": 0.0,
+        "constraints_version": "limits-v1",
+        "proposed_positions": positions,
+    }
+    kw.update(overrides)
+    return RiskRequest(**kw)
+
+
+def test_portfolio_valid_under_limits_approved() -> None:
+    positions = [_pos(f"A{i}", 0.10) for i in range(4)]
+    res = _pf_engine().approve_portfolio(_req(positions, cash_weight=0.6))
+    assert res.status == RiskStatus.APPROVED
+    assert res.executable
+    assert res.approved_targets == {f"A{i}": 0.10 for i in range(4)}
+    assert sum(res.approved_targets.values()) <= 1.0 + 1e-9
+
+
+def test_portfolio_single_name_cap_reduced() -> None:
+    res = _pf_engine().approve_portfolio(_req([_pos("AAPL", 0.50)]))
+    assert res.status == RiskStatus.REDUCED
+    assert res.executable
+    assert abs(res.approved_targets["AAPL"] - 0.10) < 1e-12
+    assert "max_asset_weight_exceeded" in res.reason_codes
+
+
+def test_portfolio_aggregate_gross_cap_proportional() -> None:
+    # 8 names x 0.20 = 1.60 gross -> proportional scale by cap/gross.
+    positions = [_pos(f"B{i}", 0.20) for i in range(8)]
+    eng = _pf_engine(max_asset_weight=0.15, max_position_count=8)
+    res = eng.approve_portfolio(_req(positions))
+    assert res.status == RiskStatus.REDUCED
+    total = sum(res.approved_targets.values())
+    assert abs(total - 1.0) < 1e-9, f"gross na schaal moet 1.0 zijn, kreeg {total}"
+    # proportional: every weight scaled by the same factor 1/1.6.
+    for w in res.approved_targets.values():
+        assert abs(w - 0.125) < 1e-9
+    assert "max_gross_exposure_exceeded" in res.reason_codes
+
+
+def test_portfolio_min_cash_weight_constraint() -> None:
+    positions = [_pos(f"C{i}", 0.20) for i in range(8)]
+    eng = _pf_engine(min_cash_weight=0.30, max_asset_weight=0.10, max_position_count=8)
+    res = eng.approve_portfolio(_req(positions))
+    total = sum(res.approved_targets.values())
+    assert total <= 1.0 - 0.30 + 1e-9
+    assert abs(total - 0.70) < 1e-9
+    assert res.executable
+
+
+def test_portfolio_short_and_margin_rejected() -> None:
+    neg = _pf_engine().approve_portfolio(_req([_pos("AAPL", -0.05)]))
+    assert neg.status == RiskStatus.REJECTED
+    assert "negative_weight_short" in neg.reason_codes
+
+    short = _pf_engine().approve_portfolio(_req([_pos("AAPL", 0.05)], allow_short=True))
+    assert short.status == RiskStatus.REJECTED
+    assert "unsupported_short_request" in short.reason_codes
+
+    margin = _pf_engine().approve_portfolio(_req([_pos("AAPL", 0.05)], allow_margin=True))
+    assert margin.status == RiskStatus.REJECTED
+    assert "unsupported_margin_request" in margin.reason_codes
+
+
+def test_portfolio_zero_leverage_caps_gross_at_nav() -> None:
+    # Gross of 2.0 with max_leverage=0 -> gross capped at 1.0 (no leverage).
+    positions = [_pos(f"D{i}", 0.25) for i in range(8)]
+    eng = _pf_engine(max_asset_weight=0.15, max_position_count=8)
+    res = eng.approve_portfolio(_req(positions))
+    assert sum(res.approved_targets.values()) <= 1.0 + 1e-9
+    assert res.status == RiskStatus.REDUCED
+
+
+def test_portfolio_max_position_count_rejected() -> None:
+    positions = [_pos(f"E{i}", 0.05) for i in range(9)]
+    res = _pf_engine(max_position_count=8).approve_portfolio(_req(positions))
+    assert res.status == RiskStatus.REJECTED
+    assert "max_position_count_exceeded" in res.reason_codes
+    assert res.approved_targets == {f"E{i}": 0.0 for i in range(9)}
+
+
+def test_portfolio_nan_inf_and_negative_nav_rejected() -> None:
+    nan = _pf_engine().approve_portfolio(_req([_pos("AAPL", float("nan"))]))
+    assert nan.status == RiskStatus.REJECTED
+    assert "non_finite_weight" in nan.reason_codes
+
+    inf = _pf_engine().approve_portfolio(_req([_pos("AAPL", float("inf"))]))
+    assert inf.status == RiskStatus.REJECTED
+    assert "non_finite_weight" in inf.reason_codes
+
+    neg_nav = _pf_engine().approve_portfolio(_req([_pos("AAPL", 0.05)], nav=-1.0))
+    assert neg_nav.status == RiskStatus.REJECTED
+    assert "invalid_nav" in neg_nav.reason_codes
+
+    weight_above_nav = _pf_engine().approve_portfolio(_req([_pos("AAPL", 1.5)]))
+    assert weight_above_nav.status == RiskStatus.REJECTED
+    assert "weight_above_nav" in weight_above_nav.reason_codes
+
+
+def test_portfolio_missing_and_stale_price_paused() -> None:
+    missing = _pf_engine().approve_portfolio(_req([_pos("AAPL", 0.05, available=None)]))
+    assert missing.status == RiskStatus.PAUSED
+    assert "missing_price" in missing.reason_codes
+
+    stale = _pf_engine().approve_portfolio(
+        _req([_pos("AAPL", 0.05, available=AS_OF + timedelta(days=1))])
+    )
+    assert stale.status == RiskStatus.PAUSED
+    assert "stale_price" in stale.reason_codes
+
+    explicit_stale = _pf_engine().approve_portfolio(
+        _req([_pos("AAPL", 0.05, available=None, fresh=False)])
+    )
+    assert explicit_stale.status == RiskStatus.PAUSED
+    assert "stale_price" in explicit_stale.reason_codes
+
+    # A closed (zero-weight) position needs no fresh price.
+    closed_ok = _pf_engine().approve_portfolio(_req([_pos("AAPL", 0.0, available=None)]))
+    assert closed_ok.status == RiskStatus.APPROVED
+
+
+def test_portfolio_missing_hard_config_paused() -> None:
+    eng = RiskEngineV21({"risk": {"max_asset_weight": 0.10}}, clock=lambda: AS_OF)
+    res = eng.approve_portfolio(_req([_pos("AAPL", 0.05)]))
+    assert res.status == RiskStatus.PAUSED
+    assert "missing_hard_limit:max_gross_exposure" in res.reason_codes
+    assert "missing_hard_limit:max_position_count" in res.reason_codes
+    # Never a permissive default: nothing executable.
+    assert not res.executable
+
+
+def test_portfolio_unknown_instrument_rejected() -> None:
+    res = _pf_engine().approve_portfolio(
+        _req([_pos("ZZZ", 0.05)], universe_ids=["AAPL", "MSFT"])
+    )
+    assert res.status == RiskStatus.REJECTED
+    assert "unknown_instrument" in res.reason_codes
+
+
+def test_portfolio_deterministic_repeated_result() -> None:
+    positions = [_pos(f"F{i}", 0.12) for i in range(5)]
+    eng = _pf_engine(max_asset_weight=0.15)
+    a = eng.approve_portfolio(_req(positions))
+    b = eng.approve_portfolio(_req(positions))
+    assert a.model_dump() == b.model_dump()
+    assert a.approval_id == b.approval_id
+    assert a.expires_at == AS_OF + timedelta(seconds=eng.approval_ttl_seconds)
+
+
+def test_portfolio_permuted_mapping_yields_equal_approval() -> None:
+    positions = [_pos(f"G{i}", 0.20) for i in range(6)]
+    permuted = [positions[i] for i in (3, 0, 5, 1, 4, 2)]
+    eng = _pf_engine(max_asset_weight=0.15, max_position_count=6)
+    a = eng.approve_portfolio(_req(positions))
+    b = eng.approve_portfolio(_req(permuted))
+    assert a.request_hash == b.request_hash
+    assert a.approval_id == b.approval_id
+    assert a.approved_targets == b.approved_targets
+    assert a.status == b.status == RiskStatus.REDUCED
+
+
+def test_portfolio_approved_weights_sum_within_all_constraints() -> None:
+    # Mixed proposal: over gross, over single name, includes a zero close.
+    positions = [
+        _pos("AAPL", 0.60),
+        _pos("MSFT", 0.30),
+        _pos("NVDA", 0.25),
+        _pos("JPM", 0.20),
+        _pos("SPY", 0.0),
+    ]
+    eng = _pf_engine(max_asset_weight=0.10, max_position_count=5)
+    res = eng.approve_portfolio(_req(positions))
+    assert res.status == RiskStatus.REDUCED
+    total = sum(res.approved_targets.values())
+    peak = max(res.approved_targets.values())
+    assert total <= 1.0 + 1e-9
+    assert total <= 1.0 - 0.0 + 1e-9  # min_cash_weight = 0.0
+    assert peak <= 0.10 + 1e-9
+    assert res.approved_targets["SPY"] == 0.0
+    assert set(res.approved_targets) == {"AAPL", "MSFT", "NVDA", "JPM", "SPY"}
+
+
+def test_portfolio_sector_cap_rejects_when_exceeded() -> None:
+    # Sector metadata present -> max_sector_weight becomes a required limit.
+    missing_sector_cfg = _pf_engine()
+    res_missing = missing_sector_cfg.approve_portfolio(
+        _req([_pos("AAPL", 0.05, sector="tech"), _pos("MSFT", 0.05, sector="tech")])
+    )
+    assert res_missing.status == RiskStatus.PAUSED
+    assert "missing_hard_limit:max_sector_weight" in res_missing.reason_codes
+
+    eng = _pf_engine(max_sector_weight=0.08, max_asset_weight=0.05, max_position_count=8)
+    res = eng.approve_portfolio(
+        _req([_pos("AAPL", 0.05, sector="tech"), _pos("MSFT", 0.05, sector="tech")])
+    )
+    # tech total would be 0.10 > 0.08 sector cap, not fixable by uniform scale->
+    assert res.status == RiskStatus.REJECTED
+    assert "max_sector_weight_exceeded" in res.reason_codes
+

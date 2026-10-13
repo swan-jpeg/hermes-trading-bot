@@ -20,19 +20,27 @@ De frozen v2 (commit ffa398c) blijft intact. Deze module is v2.1.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 
 import numpy as np
 
 from hermes_bot.portfolio import PortfolioState
 from hermes_bot.risk_v2.montecarlo import MonteCarloEngineV2
+from hermes_bot.risk_v2_1.portfolio_risk import evaluate_portfolio
 from hermes_bot.risk_v2_1.scores import (
     OpportunityScore,
     RiskEnvironmentScore,
     risk_budget_from_scores,
     state_label,
 )
-from hermes_bot.schemas import MonteCarloResult, RLRawDecision
+from hermes_bot.schemas import (
+    MonteCarloResult,
+    RiskApprovalResult,
+    RiskRequest,
+    RLRawDecision,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -169,9 +177,14 @@ class V21Breakdown:
 class RiskEngineV21:
     """Adaptive risk-budgeting engine with two-axis scores + 3 layers."""
 
-    def __init__(self, config: dict) -> None:
+    def __init__(self, config: dict, *, clock: Callable[[], datetime] | None = None) -> None:
         self.cfg = config.get("risk", {})
         self.mc = MonteCarloEngineV2(seed=self.cfg.get("seed", 42), n_paths=1000)
+
+        # Deterministic clock + approval TTL for portfolio approvals.
+        # Injecting a fixed clock makes expiry deterministic in tests.
+        self._clock = clock
+        self.approval_ttl_seconds = float(self.cfg.get("approval_ttl_seconds", 300) or 300)
 
         # Exposure.
         self.base_exposure = self.cfg.get("base_exposure", 0.90)
@@ -269,6 +282,26 @@ class RiskEngineV21:
         return float(np.clip(target, self.min_exposure, self.max_exposure))
 
     # --- Main entry point ---
+    def approve_portfolio(self, request: RiskRequest) -> RiskApprovalResult:
+        """Canonical whole-portfolio v2.1 approval (contracts §4.6).
+
+        Enforces configured hard per-asset and aggregate constraints on the
+        complete proposed target map in one deterministic, order-independent
+        call. Reads ``max_asset_weight``, ``max_gross_exposure``,
+        ``max_sector_weight`` (only with sector metadata), ``max_leverage``,
+        ``min_cash_weight`` and ``max_position_count`` from ``config["risk"]``.
+        Missing/invalid hard limits never fall back to permissive defaults:
+        the result is ``paused`` with explicit reason codes.
+
+        Returns an immutable :class:`RiskApprovalResult`. Does not execute.
+        """
+        return evaluate_portfolio(
+            request,
+            self.cfg,
+            clock=self._clock,
+            ttl_seconds=self.approval_ttl_seconds,
+        )
+
     def approve(
         self,
         decision: RLRawDecision,
@@ -277,7 +310,15 @@ class RiskEngineV21:
         mc: MonteCarloResult | None = None,
         alpha_signals: dict | None = None,
     ) -> tuple[float, V21Breakdown]:
-        """Compute the effective exposure with a full breakdown."""
+        """LEGACY compatibility adapter — single-entity exposure only.
+
+        DEPRECATED for portfolio safety: this returns one exposure number for
+        one decision and does NOT perform an aggregate, whole-portfolio check.
+        It must not be relied on to enforce aggregate hard constraints. Use
+        :meth:`approve_portfolio` for the canonical, portfolio-level approval.
+
+        Kept unchanged so existing callers (pipeline, backtests) keep working.
+        """
         if decision.action.value == "sell" and decision.exit_reason.value != "none":
             self.prev_exposure = 0.0
             return 0.0, V21Breakdown(
