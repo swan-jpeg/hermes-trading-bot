@@ -21,6 +21,8 @@ import math
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+import numpy as np
+
 from hermes_bot.config import load_config
 from hermes_bot.expansions import (
     BottleneckAgent,
@@ -37,7 +39,17 @@ from hermes_bot.risk_v2.montecarlo import DEFAULT_SCENARIOS, MonteCarloEngineV2
 from hermes_bot.risk_v2_1 import RiskEngineV21
 from hermes_bot.risk_v2_1.portfolio_risk import REQUIRED_HARD_LIMITS
 from hermes_bot.rl.context import AssetContext, build_asset_context
-from hermes_bot.schemas import MonteCarloResult
+from hermes_bot.schemas import (
+    Action,
+    ExitReason,
+    MarketState,
+    MonteCarloResult,
+    RiskApprovalResult,
+    RiskRequest,
+    RiskTargetPosition,
+    RLRawDecision,
+)
+from hermes_bot.strategy import Strategy, build_strategy
 
 
 # --- Portfolio mark error --- 
@@ -63,6 +75,9 @@ class PipelineResult:
     decisions: list[dict] = field(default_factory=list)  # per-entiteit RL/risk-output
     exposures: list[float] = field(default_factory=list)
     asset_contexts: list[dict] = field(default_factory=list)  # per-entiteit RL-input
+    # T09 deterministic baseline decision artifacts.
+    proposal: dict = field(default_factory=dict)
+    risk_approval: dict = field(default_factory=dict)
     # Monte Carlo of this cycle ([[08]]): paths, VaR/ES, crash probability, model.
     monte_carlo: dict = field(default_factory=dict)
     # Crash scenarios forced on the approved portfolio ([[08]] point 3).
@@ -173,7 +188,12 @@ def build_regime_input(features: dict | None = None) -> dict:
 class Pipeline:
     """Orchestrates the full architecture chain (integrated)."""
 
-    def __init__(self, config: dict | None = None) -> None:
+    def __init__(
+        self,
+        config: dict | None = None,
+        policy: object | None = None,
+        price_provider: object | None = None,
+    ) -> None:
         # Load base config
         base_cfg = load_config()
         
@@ -194,6 +214,23 @@ class Pipeline:
         self.mc = MonteCarloEngineV2(seed=self.cfg.get("seed", 42), n_paths=1000)
         self.bottleneck_analyzer = BottleneckAnalyzer()
         
+        # Optional RL policy (default disabled). The deterministic baseline is
+        # always used unless a later task wires an enabled policy.
+        self.policy = policy
+        self.strategy: Strategy = build_strategy(self.cfg, policy)
+        
+        # Impact agent: deterministic, evidence-linked by default.  Callers can
+        # inject a pre-built agent or configuration (rules/catalog/graph).
+        self.impact_agent = self.cfg.get("impact_agent") or build_impact_agent(self.cfg)
+        self.portfolio = PortfolioState(cash=100_000.0)
+        # Price/indicator data source. Defaults to lazy yfinance; tests inject
+        # a stub so the chain runs offline.
+        from hermes_bot.market.indicators_link import fetch_closes
+        self.closes_provider = price_provider or self.cfg.get("closes_provider") or fetch_closes
+        self._closes_cache: dict[str, object] = {}
+        # Portfolio mark history for risk state tracking
+        self._portfolio_marks: list[tuple[datetime, float, float, str]] = []
+
     def _deep_merge(self, base: dict, override: dict) -> dict:
         """Deep merge two dictionaries."""
         result = base.copy()
@@ -205,46 +242,46 @@ class Pipeline:
                 # Override with caller's value (even if it's not a dict)
                 result[key] = value
         return result
-        
+
     def _validate_risk_config(self) -> None:
         """Validate required risk limits at pipeline construction.
-        
+
         Raises:
             PortfolioMarkError: If any required risk limit is missing or non-finite.
         """
         risk_cfg = self.cfg.get("risk", {})
-        
+
         # Check all required limits
         for name in REQUIRED_HARD_LIMITS:
             value = risk_cfg.get(name)
-            
-            # Check if limit is missing or non-finite 
+
+            # Check if limit is missing or non-finite
             if value is None:
                 raise PortfolioMarkError(f"Required risk limit '{name}' is missing from config")
-            
+
             # Check if limit is finite
             is_finite = isinstance(value, (int, float)) and math.isfinite(value)
             if not isinstance(value, (int, float)) or not is_finite:
                 raise PortfolioMarkError(
                     f"Required risk limit '{name}' is not a finite number: {value}")
-                
+
         # Special case: if max_sector_weight is not present, but we detect max_sector_risk,
         # convert it. This preserves backwards compatibility with deprecated alias
         if "max_sector_weight" not in risk_cfg and "max_sector_risk" in risk_cfg:
             # Convert deprecated alias to new name for backwards compatibility
             # This is needed for the future compatibility requirement in the task
             pass  # The v2.1 engine uses max_sector_weight, it will be handled there later
-        # Impact agent: deterministic, evidence-linked by default.  Callers can
-        # inject a pre-built agent or configuration (rules/catalog/graph).
-        self.impact_agent = self.cfg.get("impact_agent") or build_impact_agent(self.cfg)
-        self.portfolio = PortfolioState(cash=100_000.0)
-        # Price/indicator data source. Defaults to lazy yfinance; tests inject
-        # a stub so the chain runs offline.
-        from hermes_bot.market.indicators_link import fetch_closes
-        self.closes_provider = self.cfg.get("closes_provider") or fetch_closes
-        self._closes_cache: dict[str, object] = {}
-        # Portfolio mark history for risk state tracking
-        self._portfolio_marks: list[tuple[datetime, float, float, str]] = []
+
+    def _fetch_closes(self, entity: str) -> object:
+        """Fetch closes for ``entity`` with caching; swallows errors."""
+        if entity in self._closes_cache:
+            return self._closes_cache[entity]
+        try:
+            closes = self.closes_provider(entity)
+        except Exception:
+            closes = None
+        self._closes_cache[entity] = closes
+        return closes
 
     def run(
         self,
@@ -356,61 +393,95 @@ class Pipeline:
             )
             asset_contexts.append(ctx)
 
-        # 4. Risk engine (v2.1) with the v2.1 config.
-        #    Each affected entity gets its OWN decision + risk approval, so
-        #    multiple impact-agent outputs run separately through the RL/risk
-        #    chain (e.g. EU AI plan -> MLST, ASML, STM each evaluated alone).
-        equity = self.portfolio.cash + 0.0  # cash-only start
-        mc = None
-        if hasattr(self.risk, "hist_returns") and len(self.risk.hist_returns) >= 30:
-            import numpy as np
-            mc = self.mc.simulate(np.asarray(self.risk.hist_returns[-60:]), horizon=20)
+        # 4. Baseline decision engine: propose a complete target map, then pass
+        #    ONE whole-portfolio risk request per cycle.  No per-entity BUY loop.
+        as_of = datetime.now(UTC)
+        market_entities = {c.entity for c in asset_contexts} | set(self.portfolio.positions)
+        closes_by_instrument: dict[str, list[float]] = {}
+        for ent in market_entities:
+            closes = self._fetch_closes(ent)
+            if closes is not None:
+                closes_by_instrument[ent] = list(np.asarray(closes).reshape(-1))
+        market_state = MarketState(as_of=as_of, closes_by_instrument=closes_by_instrument)
 
-        from hermes_bot.schemas import Action, ExitReason, RLRawDecision
-        # Risk inputs: regional scores + regime/orderflow (not fusion inputs).
-        regional_dict = regional_input.get("regional_scores", {})
-        regional_avg = 0.0
-        if regional_dict:
-            regional_avg = sum(regional_dict.values()) / len(regional_dict)
-        alpha_signals = {
-            "regional_score": round(regional_avg, 4),
-            "regime": regime_input.get("regime", "unknown"),
-            "regime_sentiment": regime_input.get("sentiment", 0.0),
-        }
-
-        decisions: list[dict] = []
-        exposures: list[float] = []
-        # If the impact agent found entities, decide per entity; else one
-        # market-level decision.
-        entities = [c.entity for c in asset_contexts] or [entity_id]
-        for ent in entities:
-            ent_ctx = next((c for c in asset_contexts if c.entity == ent), None)
-            ent_sent = ((ent_ctx.market_sentiment - 0.5) * 2.0 if ent_ctx
-                        else fused.emotie.get("sentiment", 0.0))
-            ent_conf = ent_ctx.sentiment_confidence if ent_ctx else fused.zekerheid
-            decision = RLRawDecision(
-                entity=ent, action=Action.BUY,
-                intent_to_alloc=1.0 if ent_sent >= 0 else 0.0,
-                zekerheid=ent_conf, rationale="pipeline-integrated",
-                timestamp=datetime.now(UTC), exit_reason=ExitReason.NONE,
+        # Impact records are forwarded for transparency; baseline strategies do
+        # NOT treat direction as a return forecast.
+        impact_records: list = []
+        for inp in inputs:
+            text = inp.get("body") or inp.get("headline") or inp.get("summary", "")
+            inp_entity = inp.get("entity_id", "")
+            if not text and not inp_entity:
+                continue
+            res = self.impact_agent.analyze(
+                text, source=inp.get("source", "news"), entity_id=inp_entity
             )
-            # Per-entity impact-shocked MC (direct from the impact agent);
-            # fall back to the portfolio MC only if the entity has no prices.
-            ent_mc = entity_mc.get(ent) if entity_mc else None
-            mc_for_entity = ent_mc or mc
-            exposure, breakdown = self.risk.approve(
-                decision, self.portfolio, equity, mc_for_entity,
-                alpha_signals=alpha_signals)
-            decisions.append(decision.model_dump())
-            exposures.append(round(exposure, 4))
-        # Primary decision = the first (or market-level) one for the result.
-        decision = RLRawDecision(**decisions[0]) if decisions else None
-        exposure = exposures[0] if exposures else 0.0
+            if res.analysis is not None:
+                impact_records.extend(res.analysis.impacts)
+
+        proposal = self.strategy.propose_targets(
+            as_of=as_of,
+            market_state=market_state,
+            portfolio_state=self.portfolio,
+            impact_records=impact_records,
+        )
+
+        current_weight_sum = math.fsum(proposal.current_weights.values())
+        cash_weight = max(0.0, 1.0 - current_weight_sum)
+        nav = (
+            self.portfolio.cash / cash_weight
+            if cash_weight > 1e-12
+            else self.portfolio.cash
+        )
+        proposed_positions = [
+            RiskTargetPosition(
+                instrument_id=iid,
+                target_weight=weight,
+                price_available_at=as_of,
+                is_price_fresh=True,
+                decision_time=as_of,
+                strategy_id=proposal.strategy_id,
+                strategy_version=proposal.strategy_version,
+                reason_codes=proposal.reasons,
+            )
+            for iid, weight in proposal.target_weights.items()
+        ]
+        risk_request = RiskRequest(
+            request_id=f"req-{as_of.isoformat()}",
+            as_of=as_of,
+            nav=nav,
+            cash_weight=cash_weight,
+            current_weights=dict(proposal.current_weights),
+            proposed_positions=proposed_positions,
+            constraints_version="risk-v2.1",
+        )
+        approval: RiskApprovalResult = self.risk.approve_portfolio(risk_request)
+
+        # Legacy display adapters (deprecated) — kept for existing consumers.
+        entities = [c.entity for c in asset_contexts] or [entity_id]
+        approved_map = approval.approved_targets
+        exposures = [round(approved_map.get(ent, 0.0), 4) for ent in entities]
+        decisions: list[dict] = []
+        for ent in entities:
+            target = approved_map.get(ent, 0.0)
+            action = Action.BUY if target > 1e-9 else Action.HOLD
+            decisions.append(
+                RLRawDecision(
+                    entity=ent,
+                    action=action,
+                    intent_to_alloc=target,
+                    zekerheid=0.5 if target > 0 else 0.0,
+                    rationale="legacy display adapter; see proposal",
+                    timestamp=as_of,
+                    exit_reason=ExitReason.NONE,
+                ).model_dump()
+            )
+        primary_decision = decisions[0] if decisions else {}
+        effective_exposure = round(math.fsum(approved_map.values()), 4)
+        max_gross = float(self.risk.cfg.get("max_gross_exposure", 1.0) or 1.0)
+        risk_budget = round(effective_exposure / max(max_gross, 1e-9), 4)
 
         # 5. Monte Carlo summary + forced crash scenarios ([[08]]).
-        #    The scenario stress runs on the APPROVED portfolio, so the crash
-        #    sensitivity of the decision itself is visible (not only the
-        #    VaR/crash probability from history).
+        mc = None
         primary_mc = next((entity_mc[e] for e in entities if e in entity_mc), None) or mc
         mc_summary = {
             "model": primary_mc.model if primary_mc else "",
@@ -422,7 +493,7 @@ class Pipeline:
                             if primary_mc else 0.0),
             "scenario_table": primary_mc.scenario_table if primary_mc else {},
         }
-        holdings = {ent: exp for ent, exp in zip(entities, exposures, strict=False) if exp > 0}
+        holdings = {ent: w for ent, w in approved_map.items() if w > 0}
         scenario_stress = self.mc.stress_scenarios(holdings, DEFAULT_SCENARIOS)
 
         # 6. Return bottleneck ratings (for logging/attribution).
@@ -438,12 +509,14 @@ class Pipeline:
             regime=regime_input.get("regime", "unknown"),
             regional_scores=regional_input.get("regional_scores", {}),
             impacted=impacted,
-            risk_budget=round(breakdown.risk_budget, 4),
-            effective_exposure=round(exposure, 4),
-            decision=decision.model_dump() if decision else {},
+            risk_budget=risk_budget,
+            effective_exposure=effective_exposure,
+            decision=primary_decision,
             decisions=decisions,
             exposures=exposures,
             asset_contexts=[c.to_dict() for c in asset_contexts],
+            proposal=proposal.model_dump(mode="json"),
+            risk_approval=approval.model_dump(mode="json"),
             monte_carlo=mc_summary,
             scenario_stress=scenario_stress,
         )

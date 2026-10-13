@@ -324,6 +324,44 @@ class RiskApprovalResult(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Decision-engine contracts (execution package §4.6 / T09)
+# ---------------------------------------------------------------------------
+# Lightweight, serializable inputs and proposal for deterministic baseline
+# strategies.  ``MarketState`` only exposes point-in-time closes that are
+# already available before the decision moment.
+
+
+class MarketState(BaseModel):
+    """Point-in-time market observations available before ``as_of``."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    as_of: datetime
+    closes_by_instrument: dict[str, list[float]] = Field(default_factory=dict)
+
+
+class DecisionProposal(BaseModel):
+    """Deterministic strategy output: a complete target-weight map (§4.6).
+
+    ``target_weights`` are NAV fractions.  Every target originates from the
+    strategy; impact direction is explicitly **not** a return forecast and is
+    ignored by the baseline implementations.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    strategy_id: str
+    strategy_version: str
+    as_of: datetime
+    market_state_as_of: datetime
+    current_weights: dict[str, float]
+    target_weights: dict[str, float]
+    reasons: list[str] = Field(default_factory=list)
+    input_record_ids: list[str] = Field(default_factory=list)
+    impact_record_count: int = 0
+
+
+# ---------------------------------------------------------------------------
 # Canonical catalog contracts (execution package §4.3 / T04)
 # ---------------------------------------------------------------------------
 # These models describe the stable entity/instrument/document/event/relation

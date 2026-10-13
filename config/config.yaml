@@ -68,3 +68,9 @@ execution:
 monitoring:
   metrics_every_sec: 60
   alert_channel: tui
+
+decision:
+  # Deterministic baseline strategy: no_trade | vol_target
+  strategy: no_trade
+  vol_target:
+    target_annual_vol: 0.125
