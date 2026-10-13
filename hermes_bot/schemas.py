@@ -269,3 +269,239 @@ class RiskApprovalResult(BaseModel):
     def executable(self) -> bool:
         """True only when the approval authorizes a target map."""
         return self.status in (RiskStatus.APPROVED, RiskStatus.REDUCED)
+
+
+# ---------------------------------------------------------------------------
+# Canonical catalog contracts (execution package §4.3 / T04)
+# ---------------------------------------------------------------------------
+# These models describe the stable entity/instrument/document/event/relation
+# foundation stored in the local SQLite catalog.  Decimal prices and weights
+# are stored as fractions in named currency; timestamps are timezone-aware UTC.
+
+_ENTITY_ID_RE = r"^ent_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+_INS_ID_RE = r"^ins_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+_EVT_ID_RE = r"^evt_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+_DOC_ID_RE = r"^doc_[0-9a-f]{64}$"
+_EDGE_ID_RE = r"^edg_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+_DEC_ID_RE = r"^dec_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+_SHA256_RE = r"^[0-9a-f]{64}$"
+
+
+class EntityType(StrEnum):
+    """Allowed canonical entity types (§4.3)."""
+
+    COMPANY = "company"
+    SECURITY = "security"
+    BOND = "bond"
+    FUND = "fund"
+    INDEX = "index"
+    COMMODITY = "commodity"
+    CONTRACT = "contract"
+    CURRENCY = "currency"
+    COUNTRY = "country"
+    GOVERNMENT = "government"
+    CENTRAL_BANK = "central_bank"
+    PERSON = "person"
+    ORGANIZATION = "organization"
+    INDICATOR = "indicator"
+    INDUSTRY = "industry"
+
+
+class RelationType(StrEnum):
+    """Typed temporal economic relations (§4.3, T07)."""
+
+    ISSUER_OF = "issuer_of"
+    SUBSIDIARY_OF = "subsidiary_of"
+    LOCATED_IN = "located_in"
+    MEMBER_OF_SECTOR = "member_of_sector"
+    SUPPLIES = "supplies"
+    CUSTOMER_OF = "customer_of"
+    EXPOSED_TO = "exposed_to"
+    POLICY_APPLIES_TO = "policy_applies_to"
+    INDICATOR_MEASURES = "indicator_measures"
+    CURRENCY_OF = "currency_of"
+
+
+class EpistemicType(StrEnum):
+    """Confidence/status of an extracted claim (§4.3)."""
+
+    CONFIRMED_FACT = "confirmed_fact"
+    ALLEGATION = "allegation"
+    FORECAST = "forecast"
+    OPINION = "opinion"
+    UNKNOWN = "unknown"
+
+
+class StrengthSemantics(StrEnum):
+    """What a relation ``strength_value`` means (§4.3)."""
+
+    OBSERVED_ASSOCIATION = "observed_association"
+    STRUCTURAL_DEPENDENCY = "structural_dependency"
+    CAUSAL_ESTIMATE = "causal_estimate"
+    UNKNOWN = "unknown"
+
+
+class ResolutionStatus(StrEnum):
+    """Alias resolution status (§4.3)."""
+
+    RESOLVED = "resolved"
+    AMBIGUOUS = "ambiguous"
+    HISTORICAL = "historical"
+    UNRESOLVED = "unresolved"
+
+
+class InstrumentType(StrEnum):
+    """Instrument subtype; kept distinct from asset class (§4.1)."""
+
+    COMMON_STOCK = "common_stock"
+    PREFERRED_STOCK = "preferred_stock"
+    ETF_SHARE = "etf_share"
+    BOND_FIXED = "bond_fixed"
+    BOND_FLOATING = "bond_floating"
+    OPTION_CALL = "option_call"
+    OPTION_PUT = "option_put"
+    FUTURE = "future"
+    SPOT = "spot"
+    CASH = "cash"
+
+
+class CanonicalEntity(BaseModel):
+    """Canonical economic entity (§4.3)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    entity_id: str = Field(pattern=_ENTITY_ID_RE)
+    entity_type: EntityType
+    canonical_name: str = Field(min_length=1)
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
+    metadata: dict[str, object] = Field(default_factory=dict)
+    created_at: datetime
+
+
+class Instrument(BaseModel):
+    """Canonical instrument (§4.1 / §4.3)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    instrument_id: str = Field(pattern=_INS_ID_RE)
+    issuer_entity_id: str | None = Field(default=None, pattern=_ENTITY_ID_RE)
+    asset_class: AssetClass
+    exchange_mic: str | None = None
+    currency: str = Field(min_length=3, max_length=3)
+    instrument_type: InstrumentType
+    canonical_name: str = Field(min_length=1)
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
+    metadata: dict[str, object] = Field(default_factory=dict)
+    created_at: datetime
+
+
+class Alias(BaseModel):
+    """Alias / ticker mapping to a canonical entity (§4.3)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    alias: str = Field(min_length=1)
+    namespace: str = Field(min_length=1)
+    entity_id: str = Field(pattern=_ENTITY_ID_RE)
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
+    resolution_status: ResolutionStatus = ResolutionStatus.RESOLVED
+    created_at: datetime
+
+
+class SourceRecord(BaseModel):
+    """Provenance record for any raw source object (§4.3)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    source_id: str = Field(min_length=1)
+    source_uri: str = Field(min_length=1)
+    source_kind: SourceKind
+    license_id: str | None = None
+    raw_object_path: str | None = None
+    published_time: datetime | None = None
+    ingested_at: datetime
+    available_at: datetime
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
+class Document(BaseModel):
+    """Document metadata; content lives in the raw object store (§4.3)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    document_id: str = Field(pattern=_DOC_ID_RE)
+    source_id: str = Field(min_length=1)
+    source_uri: str = Field(min_length=1)
+    raw_sha256: str = Field(pattern=_SHA256_RE)
+    language: str | None = None
+    document_type: str = Field(min_length=1)
+    published_time: datetime | None = None
+    ingested_at: datetime
+    available_at: datetime
+    license_id: str | None = None
+    raw_object_path: str | None = None
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
+class Event(BaseModel):
+    """Extracted event/claim with evidence references (§4.3)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    event_id: str = Field(pattern=_EVT_ID_RE)
+    event_type: str = Field(min_length=1)
+    normalized_claim_text: str = Field(min_length=1)
+    stance_direction: str | None = None
+    event_time: datetime | None = None
+    published_time: datetime | None = None
+    available_at: datetime
+    epistemic_type: EpistemicType = EpistemicType.UNKNOWN
+    novelty: float | None = Field(default=None, ge=0.0, le=1.0)
+    extractor_version: str = Field(min_length=1)
+    source_document_ids: list[str] = Field(default_factory=list)
+    source_chunk_ids: list[str] = Field(default_factory=list)
+    affected_entity_ids: list[str] = Field(default_factory=list)
+    uncertainty_fields: dict[str, object] = Field(default_factory=dict)
+    created_at: datetime
+
+
+class RelationEdge(BaseModel):
+    """Typed temporal relation between two canonical entities (§4.3)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    edge_id: str = Field(pattern=_EDGE_ID_RE)
+    from_entity_id: str = Field(pattern=_ENTITY_ID_RE)
+    relation_type: RelationType
+    to_entity_id: str = Field(pattern=_ENTITY_ID_RE)
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
+    observed_at: datetime | None = None
+    available_at: datetime
+    evidence_ids: list[str] = Field(default_factory=list)
+    source_ids: list[str] = Field(default_factory=list)
+    strength_value: float | None = None
+    strength_semantics: StrengthSemantics = StrengthSemantics.UNKNOWN
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    method_version: str = Field(min_length=1)
+    created_at: datetime
+
+
+class DecisionRecord(BaseModel):
+    """Schema-only decision ledger row; populated in T12 (§4.6)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    decision_id: str = Field(pattern=_DEC_ID_RE)
+    instrument_id: str = Field(pattern=_INS_ID_RE)
+    target_weight: float = Field(ge=-1.0, le=1.0)
+    decision_time: datetime
+    strategy_id: str | None = None
+    strategy_version: str | None = None
+    input_record_ids: list[str] = Field(default_factory=list)
+    reason_codes: list[str] = Field(default_factory=list)
+    approval_id: str | None = None
+    created_at: datetime
