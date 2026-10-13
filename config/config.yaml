@@ -41,10 +41,14 @@ fusion:
   weigh_by_credibility: true
 
 risk:
-  max_portfolio_drawdown: -0.08   # risk-off trigger
+  # Section 4.7 — Initial defaults for risk limits
   max_asset_weight: 0.10          # per asset
-  max_sector_risk: 0.20           # per sector/cluster
+  max_gross_exposure: 1.00        # total portfolio exposure
+  max_sector_weight: 0.20         # per sector/cluster
   max_leverage: 0.0               # no leverage to start
+  min_cash_weight: 0.0            # minimum cash weight in portfolio
+  max_position_count: 8           # maximum number of positions
+  max_portfolio_drawdown: -0.08   # risk-off trigger
   vol_target: 0.125               # annualized vol target
   cash_min_in_crash: 0.30
 

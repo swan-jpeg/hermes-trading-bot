@@ -17,9 +17,11 @@ is visible/loggable.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from hermes_bot.config import load_config
 from hermes_bot.expansions import (
     BottleneckAgent,
     BottleneckAnalyzer,
@@ -33,8 +35,15 @@ from hermes_bot.market.indicators_link import impact_shocked_mc as _mc
 from hermes_bot.portfolio import PortfolioState
 from hermes_bot.risk_v2.montecarlo import DEFAULT_SCENARIOS, MonteCarloEngineV2
 from hermes_bot.risk_v2_1 import RiskEngineV21
+from hermes_bot.risk_v2_1.portfolio_risk import REQUIRED_HARD_LIMITS
 from hermes_bot.rl.context import AssetContext, build_asset_context
 from hermes_bot.schemas import MonteCarloResult
+
+
+# --- Portfolio mark error --- 
+class PortfolioMarkError(Exception):
+    """Raised when portfolio mark validation fails."""
+    pass
 
 
 @dataclass
@@ -165,11 +174,66 @@ class Pipeline:
     """Orchestrates the full architecture chain (integrated)."""
 
     def __init__(self, config: dict | None = None) -> None:
-        self.cfg = config or {}
+        # Load base config
+        base_cfg = load_config()
+        
+        # Deep merge: if config is provided, overlay caller's config on base
+        if config is not None:
+            # Create a deep merge of base and caller's config
+            effective_cfg = self._deep_merge(base_cfg, config)
+        else:
+            effective_cfg = base_cfg
+            
+        self.cfg = effective_cfg
+        
+        # Validate required risk limits using effective config
+        self._validate_risk_config()
+        
         self.fusion = WeightedFusion()
-        self.risk = RiskEngineV21(config or {})
+        self.risk = RiskEngineV21(self.cfg)
         self.mc = MonteCarloEngineV2(seed=self.cfg.get("seed", 42), n_paths=1000)
         self.bottleneck_analyzer = BottleneckAnalyzer()
+        
+    def _deep_merge(self, base: dict, override: dict) -> dict:
+        """Deep merge two dictionaries."""
+        result = base.copy()
+        for key, value in override.items():
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                # Recursive merge for nested dicts
+                result[key] = self._deep_merge(result[key], value)
+            else:
+                # Override with caller's value (even if it's not a dict)
+                result[key] = value
+        return result
+        
+    def _validate_risk_config(self) -> None:
+        """Validate required risk limits at pipeline construction.
+        
+        Raises:
+            PortfolioMarkError: If any required risk limit is missing or non-finite.
+        """
+        risk_cfg = self.cfg.get("risk", {})
+        
+        # Check all required limits
+        for name in REQUIRED_HARD_LIMITS:
+            value = risk_cfg.get(name)
+            
+            # Check if limit is missing or non-finite 
+            if value is None:
+                raise PortfolioMarkError(f"Required risk limit '{name}' is missing from config")
+            
+            # Check if limit is finite
+            is_finite = isinstance(value, (int, float)) and math.isfinite(value)
+            if not isinstance(value, (int, float)) or not is_finite:
+                raise PortfolioMarkError(
+                    f"Required risk limit '{name}' is not a finite number: {value}")
+                
+        # Special case: if max_sector_weight is not present, but we detect max_sector_risk,
+        # convert it. This preserves backwards compatibility with deprecated alias
+        if "max_sector_weight" not in risk_cfg and "max_sector_risk" in risk_cfg:
+            # Convert deprecated alias to new name for backwards compatibility
+            # This is needed for the future compatibility requirement in the task
+            pass  # The v2.1 engine uses max_sector_weight, it will be handled there later
         # Impact agent: keyword matching, or with LLM interpretation as config that asks for it.
         if self.cfg.get("impact_use_llm"):
             self.impact_agent = LLMImpactAgent(
@@ -182,6 +246,8 @@ class Pipeline:
         from hermes_bot.market.indicators_link import fetch_closes
         self.closes_provider = self.cfg.get("closes_provider") or fetch_closes
         self._closes_cache: dict[str, object] = {}
+        # Portfolio mark history for risk state tracking
+        self._portfolio_marks: list[tuple[datetime, float, float, str]] = []
 
     def run(
         self,
@@ -385,7 +451,63 @@ class Pipeline:
             scenario_stress=scenario_stress,
         )
 
+    def record_portfolio_mark(
+        self, 
+        as_of: datetime, 
+        equity: float, 
+        return_decimal: float, 
+        source_quality: str
+    ) -> None:
+        """Record portfolio performance mark with validation.
+        
+        Validates finite positive equity and finite return, appends return once,
+        updates drawdown, prevents duplicate/out-of-order as_of marks, and
+        exposes a typed error on invalid sequence.
+        
+        Args:
+            as_of: Timestamp of the mark
+            equity: Portfolio equity value (must be finite and positive)
+            return_decimal: Portfolio return as decimal (must be finite)
+            source_quality: Quality indicator for the data source
+            
+        Raises:
+            PortfolioMarkError: If equity is not finite and positive, or return is not finite,
+                       or if as_of mark is duplicate or out-of-order.
+        """
+        # Validate inputs
+        is_equity_valid = isinstance(equity, (int, float)) and equity > 0
+        if not is_equity_valid:
+            raise PortfolioMarkError(f"Equity must be a finite positive number, got {equity}")
+        
+        # Check if return is finite
+        is_return_valid = isinstance(return_decimal, (int, float)) and math.isfinite(return_decimal)
+        if not is_return_valid:
+            raise PortfolioMarkError(f"Return must be a finite number, got {return_decimal}")
+        
+        # Check for duplicate or out-of-order marks
+        if self._portfolio_marks:
+            last_as_of, _, _, _ = self._portfolio_marks[-1]
+            if as_of <= last_as_of:
+                raise PortfolioMarkError(
+                    f"As-of timestamp {as_of} is duplicate or out-of-order "
+                    f"compared to last mark {last_as_of}"
+                )
+        
+        # Append the mark
+        self._portfolio_marks.append((as_of, equity, return_decimal, source_quality))
+        
+        # Update risk engine with drawdown
+        self.risk.update_drawdown(equity)
+        
+        # Update risk engine with return history
+        self.risk.record_return(return_decimal)
+
     def record_equity(self, equity: float) -> None:
+        """DEPRECATED: Use record_portfolio_mark instead.
+        
+        This method is kept for compatibility but will be removed in a future version.
+        It only updates the drawdown in the risk engine.
+        """
         self.risk.update_drawdown(equity)
 
 

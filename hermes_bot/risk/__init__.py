@@ -21,9 +21,13 @@ class RiskEngine:
 
     def __init__(self, config: dict) -> None:
         self.cfg = config.get("risk", {})
+        # Preserve deprecated alias for backward compatibility (as per task requirement)
+        if "max_sector_risk" in self.cfg and "max_sector_weight" not in self.cfg:
+            # Map deprecated alias to new name for backward compatibility
+            self.cfg["max_sector_weight"] = self.cfg["max_sector_risk"]
         self._limits = {
             "max_asset_weight": self.cfg.get("max_asset_weight", 0.10),
-            "max_sector_risk": self.cfg.get("max_sector_risk", 0.20),
+            "max_sector_weight": self.cfg.get("max_sector_weight", 0.20),  # use new name
             "max_leverage": self.cfg.get("max_leverage", 0.0),
             "cash_min_in_crash": self.cfg.get("cash_min_in_crash", 0.30),
             "max_portfolio_drawdown": self.cfg.get("max_portfolio_drawdown", -0.08),

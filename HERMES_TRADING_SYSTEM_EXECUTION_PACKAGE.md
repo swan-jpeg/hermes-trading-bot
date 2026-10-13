@@ -902,3 +902,27 @@ The CEO should delegate **T01 — Portfolio-level v2.1 risk contract and hard li
 
 **Unresolved assumptions:** instrument metadata and sector membership must be supplied by the future catalog rather than guessed; market-data freshness thresholds need explicit source-specific configuration; any relation strength or impact confidence remains uncalibrated until labeled historical evaluation exists; model download/license details must be rechecked at T13; OOS artifacts for v2.1 are not present as reproducible raw-data results in the checked-in `var/forensic_v21` directory.
 
+---
+
+## 16. CEO architecture decisions (append-only)
+
+### AD-01 — T02 config validation vs. partial-config callers (2026-10-13)
+
+**Context:** T02 requires both "validate configuration at pipeline construction and fail closed on a
+missing required risk limit" AND "preserve `Pipeline(config=...)` callers". Two coder attempts
+revealed the conflict: strict construction-time validation fails closed for existing callers that
+pass a partial config dict (e.g. `Pipeline({"closes_provider": stub})` in
+`tests/test_multi_entity.py`), which broke 2 previously-passing tests.
+
+**Decision:** `Pipeline.__init__` builds an **effective config by deep-merging the repository config
+(`load_config()`) as the base with the caller's explicit config overlaid** (recursive dict merge;
+non-dict values such as a callable `closes_provider` from the caller win). Required risk limits are
+then validated on the *effective* config and the pipeline **fails closed** if a required limit is
+still missing/non-finite after the merge. `Pipeline(config=None)` → effective config = repo config.
+This preserves existing callers (they inherit validated repo risk defaults) while keeping the
+fail-closed guarantee for a genuinely incomplete effective config.
+
+**Affected prompts/registry:** T02 (T02-c1 and the final T02-c2 corrective); T02 status BLOCKED
+pending the corrective. T01 unaffected. Follow-on tasks (T03+) unaffected; the T02 dependency
+contract (validated risk settings reachable via `pipeline.risk.cfg`) is unchanged.
+
