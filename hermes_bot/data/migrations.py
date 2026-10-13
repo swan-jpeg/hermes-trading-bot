@@ -219,6 +219,89 @@ def _create_catalog_schema(conn: sqlite3.Connection) -> None:
     )
 
 
+def _create_ledger_schema(conn: sqlite3.Connection) -> None:
+    """v2: append-only decision ledger, cycle header and health state tables."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS ledger_cycle (
+            cycle_id TEXT PRIMARY KEY,
+            decision_time TEXT NOT NULL,
+            strategy_id TEXT,
+            strategy_version TEXT,
+            proposal_hash TEXT,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS ledger_entry (
+            entry_id TEXT PRIMARY KEY,
+            cycle_id TEXT NOT NULL REFERENCES ledger_cycle(cycle_id),
+            sequence INTEGER NOT NULL,
+            entry_type TEXT NOT NULL,
+            decision_time TEXT,
+            source_document_ids TEXT NOT NULL DEFAULT '[]',
+            dataset_version TEXT,
+            config_version TEXT,
+            strategy_id TEXT,
+            strategy_version TEXT,
+            proposal_hash TEXT,
+            approval_id TEXT,
+            request_hash TEXT,
+            order_intent_id TEXT,
+            idempotency_key TEXT,
+            broker_order_id TEXT,
+            broker_status TEXT,
+            instrument_id TEXT,
+            fill_quantity REAL,
+            fill_price REAL,
+            fill_fees REAL,
+            portfolio_snapshot TEXT,
+            error_code TEXT,
+            recovery_action TEXT,
+            payload TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE (cycle_id, sequence)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_ledger_entry_cycle_seq
+        ON ledger_entry(cycle_id, sequence)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_ledger_entry_approval
+        ON ledger_entry(approval_id)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_ledger_entry_intent
+        ON ledger_entry(order_intent_id)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_ledger_entry_idempotency
+        ON ledger_entry(idempotency_key)
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS health_state (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            state TEXT NOT NULL,
+            reason TEXT NOT NULL DEFAULT '',
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+
+
 # ---------------------------------------------------------------------------
 # Public migration registry
 # ---------------------------------------------------------------------------
@@ -226,6 +309,7 @@ def _create_catalog_schema(conn: sqlite3.Connection) -> None:
 MIGRATIONS: list[Migration] = [
     Migration(version=0, name="legacy_market_data", apply=_create_legacy_market_data),
     Migration(version=1, name="canonical_catalog", apply=_create_catalog_schema),
+    Migration(version=2, name="decision_ledger", apply=_create_ledger_schema),
 ]
 
 
