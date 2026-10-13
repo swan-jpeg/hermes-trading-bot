@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from hermes_bot.execution import ExecutionEngine, Order, PaperBroker
 from hermes_bot.expansions import BottleneckAnalyzer, RegimeDetector
 from hermes_bot.fusion import WeightedFusion
 from hermes_bot.portfolio import PortfolioState
@@ -61,19 +60,12 @@ def run_demo() -> dict:
     risk = RiskEngine({"risk": {"max_asset_weight": 0.10}})
     approval = risk.approve(decision, portfolio, mc)
 
-    # 5. Execution (paper) if approved.
+    # 5. Execution (T10 / v1).
+    #    Raw orders via ExecutionEngine.execute zijn uitgeschakeld. Een echte
+    #    cyclus gebruikt OrderManager.plan(approval, positions, prices, rules,
+    #    as_of) + submit_mock(intents) met een RiskApprovalResult. Deze demo
+    #    laat het execution-blok daarom bewust leeg.
     fills: list[dict] = []
-    if approval.approved:
-        eng = ExecutionEngine(PaperBroker())
-        target_qty = approval.target_alloc.get("AAPL", 0.0)
-        # Sell the full position on exit; otherwise buy/reduce based on alloc.
-        if decision.action.value == "sell" and decision.exit_reason.value != "none":
-            side, qty = "sell", int(pos.qty)
-        else:
-            side, qty = ("buy" if target_qty >= 0 else "sell"), int(abs(target_qty) * 1000)
-        if qty > 0:
-            eng.execute([Order(asset="AAPL", side=side, qty=qty)])
-            fills = eng.fills()
 
     # 6. Uitbreidingen: regime + bottleneck.
     regime = RegimeDetector().detect(

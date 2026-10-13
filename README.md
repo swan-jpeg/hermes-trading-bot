@@ -147,7 +147,7 @@ hermes_bot/
 ├── simulation/      # LAYER 6: deprecated shim → risk_v2/montecarlo.py
 ├── risk/            # LAYER 6: risk engine (sizing, drawdown, stress, hedging)
 ├── portfolio/       # allocation across asset classes (multi-asset)
-├── execution/       # LAYER 7: output action → broker (paper/live)
+├── execution/       # LAYER 7: approval-bound order manager → mock/paper broker (no live)
 ├── expansions/      # B2B bottleneck, regime detection, orderflow
 └── webui.py         # web interface (port 9124)
 ```
@@ -155,10 +155,11 @@ hermes_bot/
 ## Core design rules
 
 1. **RL proposes, Risk approves** — never send an RL output straight to the market.
-2. **Fail-closed**: if the broker is unreachable → no order.
-3. **Decision ≠ execution**: log intent and real fills.
-4. **Verify every order** with the broker.
-5. **Backtest before money, paper before live.**
+2. **Approval-bound execution** — `OrderManager.plan(approval, ...)` derives order intents only from a current `RiskApprovalResult`; `submit_mock` enforces idempotency and reconciliation. The `AlpacaBroker` adapter is disabled in the MVP.
+3. **Fail-closed**: if the broker is unreachable, kill switch is active, or approval is missing/expired → no order.
+4. **Decision ≠ execution**: log intent and real fills.
+5. **Verify every order** with the broker.
+6. **Backtest before money, paper before live.**
 
 ## Monte Carlo — the risk route (layer 6)
 

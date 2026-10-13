@@ -2,10 +2,26 @@
 
 Principe: decision != executie. Deze laag is de enige plek die orders
 naar de broker stuurt. Fail-closed: geen antwoord -> geen order.
+
+T10 / v1: de onveilige ``ExecutionEngine.execute``-methode accepteert geen
+raw orders meer. Gebruik :class:`OrderManager` met een geldige
+:class:`RiskApprovalResult` via ``plan`` + ``submit_mock``.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+from hermes_bot.execution.mock_broker import MockBroker
+from hermes_bot.execution.order_manager import OrderManager
+from hermes_bot.execution.schemas import (
+    BrokerResult,
+    Fill,
+    InstrumentRule,
+    OrderIntent,
+    OrderSide,
+    OrderStatus,
+    TimeInForce,
+)
 
 
 @dataclass
@@ -60,6 +76,13 @@ class PaperBroker(BaseBroker):
 
 
 class ExecutionEngine:
+    """Legacy execution wrapper.
+
+    .. deprecated:: T10
+        Raw ``execute`` without a :class:`RiskApprovalResult` is disabled.
+        Use :class:`OrderManager` instead.
+    """
+
     def __init__(self, broker: BaseBroker, fail_closed: bool = True) -> None:
         self.broker = broker
         self.fail_closed = fail_closed
@@ -68,14 +91,27 @@ class ExecutionEngine:
     def execute(self, orders: list[Order]) -> list[Order]:
         if self.fail_closed and not self.broker.health():
             raise RuntimeError("Broker onbereikbaar -> fail-closed, geen orders uitgevoerd")
-        out: list[Order] = []
-        for o in orders:
-            filled = self.broker.submit(o)
-            self._log.append(
-                {"asset": o.asset, "side": o.side, "qty": o.qty, "status": filled.status}
-            )
-            out.append(filled)
-        return out
+        raise RuntimeError(
+            "ExecutionEngine.execute zonder RiskApprovalResult is uitgeschakeld (T10). "
+            "Gebruik OrderManager.plan + submit_mock met een geldige RiskApprovalResult."
+        )
 
     def fills(self) -> list[dict]:
         return self._log
+
+
+__all__ = [
+    "BaseBroker",
+    "BrokerResult",
+    "ExecutionEngine",
+    "Fill",
+    "InstrumentRule",
+    "MockBroker",
+    "Order",
+    "OrderIntent",
+    "OrderManager",
+    "OrderSide",
+    "OrderStatus",
+    "PaperBroker",
+    "TimeInForce",
+]
