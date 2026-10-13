@@ -4,12 +4,23 @@
 **This file** is the durable, cross-session task registry required by the CEO operating instructions (package §8, §12).
 **Baseline repository:** branch `master`, HEAD `70be28d` ("Concept: Impact Agent catalog + RAG design").
 
-**Delegation / coder model:** the coder subagent is pinned in `~/.hermes/config.yaml` to
-`delegation.provider=nous`, `delegation.model=qwen/qwen3-coder-30b-a3b-instruct` (coding specialist).
-Before this pin, subagents inherited the parent model (`deepseek/deepseek-v4.1-flash`). T01 was
-written by an inherited-model child but was independently verified by the CEO (39 tests + 10/10
-acceptance checks) and stands on that evidence. Verify the child model with `delegate_task(action='list')`
-at each spawn.
+**Delegation / coder route (BINDING):** all coding tasks are executed by the specialised
+**`coder` consultant** (Atlas Hermes profile `coder`, model `qwen/qwen3-coder-30b-a3b-instruct`,
+`toolsets: [kanban]` + terminal), dispatched over the shared kanban board — NOT via generic
+`delegate_task` subagents. Standard dispatch:
+
+```bash
+hermes kanban create "<title>" --assignee coder \
+  --workspace dir:/home/olivier/trading-bot \
+  --body-file <task_body.md> --created-by ceo --idempotency-key <key>
+hermes kanban dispatch     # spawns 'hermes -p coder ... kanban task <id>'
+```
+
+After dispatch, verify the worker really runs (`ps aux | grep "hermes -p coder"`) and that new
+files/commits appear in the repo — a "running" status without a process is a zombie claim.
+T01 was implemented before this route was fixed and by a generic subagent; it was independently
+verified by the CEO (39 tests + 10/10 acceptance checks, commit `4f27220`) and stands on that
+evidence. From T02 onward, coding runs only through the `coder` consultant.
 
 Allowed states: `BACKLOG`, `READY`, `IN_PROGRESS`, `REVIEW`, `VERIFIED`, `BLOCKED`, `NEEDS_APPROVAL`, `FAILED`.
 
@@ -24,8 +35,8 @@ Allowed states: `BACKLOG`, `READY`, `IN_PROGRESS`, `REVIEW`, `VERIFIED`, `BLOCKE
 
 | ID | Task | Priority | Dependencies | Status | Prompt ver. | Branch/commit | Files changed | Tests (exact) | Approval | Evidence / notes |
 |---|---|---:|---|---|---|---|---|---|---|---|
-| T01 | Portfolio-level v2.1 risk contract and hard limits | P0 | None | VERIFIED | v1 | master @ 70be28d (uncommitted) | schemas.py, risk_v2_1/portfolio_risk.py (new), risk_v2_1/__init__.py, tests/test_risk_v2_1.py | `pytest tests/test_risk_v2_1.py tests/test_core.py` = 39 passed | none needed (offline) | CEO-verified 2026-10-13; 10/10 independent acceptance checks pass |
-| T02 | Validated config and pipeline risk-state feed | P0 | T01 | IN_PROGRESS | v1 | master @ 70be28d | — | — | none | Delegated to coder-agent 2026-10-13 (T01 VERIFIED) |
+| T01 | Portfolio-level v2.1 risk contract and hard limits | P0 | None | VERIFIED | v1 | master @ 4f27220 (committed) | schemas.py, risk_v2_1/portfolio_risk.py (new), risk_v2_1/__init__.py, tests/test_risk_v2_1.py | `pytest tests/test_risk_v2_1.py tests/test_core.py` = 39 passed | none needed (offline) | CEO-verified 2026-10-13; 10/10 independent acceptance checks pass |
+| T02 | Validated config and pipeline risk-state feed | P0 | T01 | VERIFIED | v1 | master @ c25046d (committed) | config/config.yaml, hermes_bot/pipeline.py, hermes_bot/risk/__init__.py, tests/test_pipeline.py | mandated `pytest tests/test_pipeline.py tests/test_risk_v2_1.py` = 45 passed; broad offline green; ruff clean | none | CEO-verified 2026-10-13 after AD-01 (deep-merge); probe A–E pass; attempts t_b44267f0→t_46972957→t_153095e7→t_b36f6754 |
 | T03 | Causal RL environment and cost-aware backtest timing | P0 | None | READY | v1 | — | — | — | none needed (offline) | Independent; held until T01 verified (one task at a time) |
 | T04 | Canonical catalog, provenance models and SQLite migrations | P1 | T01 contracts | BACKLOG | v1 | — | — | — | none | Blocked on T01 |
 | T05 | Offline-first ingestion interfaces and timestamp normalization | P1 | T04 | BACKLOG | v1 | — | — | — | none | Blocked on T04 |
@@ -43,6 +54,28 @@ Allowed states: `BACKLOG`, `READY`, `IN_PROGRESS`, `REVIEW`, `VERIFIED`, `BLOCKE
 | T17 | Benchmark-driven scale review | P3 | T06, T07, T12; measurements | BACKLOG | v1 | — | — | — | none | Blocked on dependencies |
 
 ## Task completion notes (append below, newest first)
+
+### T02 — Validated config and pipeline risk-state feed
+
+```text
+Task ID / prompt version: T02 / v1  (attempts: t_b44267f0 FAILED, t_46972957 FAILED, t_153095e7 AD-01, t_b36f6754 GREEN)
+Status: VERIFIED (commit c25046d)
+Branch / commit: master @ c25046d (committed)
+Files changed: config/config.yaml, hermes_bot/pipeline.py, hermes_bot/risk/__init__.py, tests/test_pipeline.py
+Tests: mandated `pytest tests/test_pipeline.py tests/test_risk_v2_1.py` = 45 passed.
+  Broader offline (core/pipeline/risk_v2/risk_v2_1/multi_entity/backtest/mc_wiring/sentiment/
+  indicators/montecarlo/impact/b2b/trained_policy) = all passed (exit 0). ruff clean.
+Acceptance evidence (final CEO probe): (A) Pipeline() risk.cfg["max_asset_weight"]==0.1;
+  (B) Pipeline({"closes_provider": stub}) constructs OK (partial callers preserved);
+  (C/D) hist_returns grows once per mark (0->2); (E) genuinely incomplete EFFECTIVE config ->
+  PortfolioMarkError (fail closed). Canonical §4.7 limits present in config/config.yaml.
+  No network/broker refs in changed files; duplicated/historically failed attempts recorded.
+Approval reference and bounded operation: none (offline synthetic only)
+Deviations / blockers: resolved via AD-01 (deep-merge caller config over repo defaults before
+  validation). One coder-authored test encoded pre-AD-01 semantics and was realigned in the final
+  corrective. Coder consultant left debug scratch files in the repo root on each run (CEO cleaned).
+Reviewer and date: CEO agent, 2026-10-13
+```
 
 ### T01 — Portfolio-level v2.1 risk contract and hard limits
 
