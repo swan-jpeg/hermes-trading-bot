@@ -37,8 +37,8 @@ Allowed states: `BACKLOG`, `READY`, `IN_PROGRESS`, `REVIEW`, `VERIFIED`, `BLOCKE
 |---|---|---:|---|---|---|---|---|---|---|---|
 | T01 | Portfolio-level v2.1 risk contract and hard limits | P0 | None | VERIFIED | v1 | master @ 4f27220 (committed) | schemas.py, risk_v2_1/portfolio_risk.py (new), risk_v2_1/__init__.py, tests/test_risk_v2_1.py | `pytest tests/test_risk_v2_1.py tests/test_core.py` = 39 passed | none needed (offline) | CEO-verified 2026-10-13; 10/10 independent acceptance checks pass |
 | T02 | Validated config and pipeline risk-state feed | P0 | T01 | VERIFIED | v1 | master @ c25046d (committed) | config/config.yaml, hermes_bot/pipeline.py, hermes_bot/risk/__init__.py, tests/test_pipeline.py | mandated `pytest tests/test_pipeline.py tests/test_risk_v2_1.py` = 45 passed; broad offline green; ruff clean | none | CEO-verified 2026-10-13 after AD-01 (deep-merge); probe A–E pass; attempts t_b44267f0→t_46972957→t_153095e7→t_b36f6754 |
-| T03 | Causal RL environment and cost-aware backtest timing | P0 | None | FAILED→c1 | v1 | master @ e66e72a (working tree, uncommitted) | backtest/__init__.py, backtest/metrics.py, backtest/runner.py, rl/env.py, train_rl.py, tests/test_backtest.py, tests/test_rl_env.py | mandated 29 passed; broad green; ruff clean — but net-cost accounting bug | none | causal fixes OK; CEO probe: sum(gross-net)=0.0105 vs true cost 0.0015 (costs double-counted per bar); corrective t_... dispatched |
-| T04 | Canonical catalog, provenance models and SQLite migrations | P1 | T01 contracts | BACKLOG | v1 | — | — | — | none | Blocked on T01 |
+| T03 | Causal RL environment and cost-aware backtest timing | P0 | None | VERIFIED | v1 | master @ 88ce8ea (committed) | backtest/__init__.py, backtest/metrics.py, backtest/runner.py, rl/env.py, train_rl.py, tests/test_backtest.py, tests/test_rl_env.py | mandated `pytest tests/test_backtest.py tests/test_rl_env.py tests/test_mc_wiring.py` = 31 passed; broad offline green; ruff clean | none | CEO-verified 2026-10-13; causal invariants + cost reconciliation probed; t_83fe72ae (blocked) → t_94d1c88d (c1 GREEN), both on kimi-k2.7-code |
+| T04 | Canonical catalog, provenance models and SQLite migrations | P1 | T01 contracts | IN_PROGRESS | v1 | master @ 88ce8ea | — | — | none | dispatched to coder 2026-10-13 (T01 VERIFIED) |
 | T05 | Offline-first ingestion interfaces and timestamp normalization | P1 | T04 | BACKLOG | v1 | — | — | — | none | Blocked on T04 |
 | T06 | Document chunking/retrieval interface and mock vector index | P2 | T04, T05 | BACKLOG | v1 | — | — | — | none | Blocked on T04,T05 |
 | T07 | Typed temporal economic graph store and bounded traversal | P2 | T04 | BACKLOG | v1 | — | — | — | none | Blocked on T04 |
@@ -54,6 +54,28 @@ Allowed states: `BACKLOG`, `READY`, `IN_PROGRESS`, `REVIEW`, `VERIFIED`, `BLOCKE
 | T17 | Benchmark-driven scale review | P3 | T06, T07, T12; measurements | BACKLOG | v1 | — | — | — | none | Blocked on dependencies |
 
 ## Task completion notes (append below, newest first)
+
+### T03 — Causal RL environment and cost-aware backtest timing
+
+```text
+Task ID / prompt version: T03 / v1  (attempts: t_83fe72ae BLOCKED, t_94d1c88d GREEN)
+Status: VERIFIED (commit 88ce8ea)
+Branch / commit: master @ 88ce8ea (committed)
+Files changed: hermes_bot/backtest/__init__.py, backtest/metrics.py, backtest/runner.py,
+  hermes_bot/rl/env.py, hermes_bot/train_rl.py, tests/test_backtest.py, tests/test_rl_env.py
+Tests: mandated `pytest tests/test_backtest.py tests/test_rl_env.py tests/test_mc_wiring.py`
+  = 31 passed. Broad offline suite = all passed (exit 0). ruff clean.
+Acceptance evidence (CEO probes): momentum trailing-only (perturbing prices after t leaves
+  mom[:t+1] unchanged); env observation at t identical under future perturbation; next-bar reward
+  hand-check (action=1 -> alloc 0.5, first return 0.05 = 0.5*(110-100)/100); cost reconciliation
+  (net_returns == equity path exactly; sum(gross)-sum(net)=0.00150226 ~ total_costs/initial=0.0015023).
+Approval reference and bounded operation: none (offline synthetic only)
+Deviations / blockers: 1st attempt blocked (capability) on default coder model qwen3-coder-30b-a3b
+  with no changes -> re-dispatched with task-level model override moonshotai/kimi-k2.7-code.
+  2nd produced correct causal fixes but a net-cost accounting bug (cumulative total_costs subtracted
+  per bar -> sum(gross-net) 7x too large); fixed in corrective T03-c1. Coder left no scratch files.
+Reviewer and date: CEO agent, 2026-10-13
+```
 
 ### T02 — Validated config and pipeline risk-state feed
 
