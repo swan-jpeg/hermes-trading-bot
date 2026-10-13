@@ -19,43 +19,11 @@ dict met de velden die de signalen-laag verwacht.
 """
 from __future__ import annotations
 
-import html
-import urllib.parse
-import urllib.request
 from datetime import UTC, datetime
-from xml.etree import ElementTree as ET
 
-from hermes_bot.data import BaseCollector, CollectorConfig
-
-
-def _fetch_rss(url: str, timeout: int = 10) -> list[dict]:
-    """Fetch an RSS/Atom feed and return the items as dicts.
-
-    Per item: {title, link, summary, published, source}.
-    """
-    req = urllib.request.Request(url, headers={"User-Agent": "HermesBot/1.0"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        data = resp.read()
-    root = ET.fromstring(data)
-    items = []
-    for item in root.iter("item") or root.iter("entry"):
-        title = (item.findtext("title") or "").strip()
-        link = item.findtext("link")
-        if link is None:
-            # Atom gebruikt <link href="...">
-            link_el = item.find("link")
-            link = link_el.get("href") if link_el is not None else ""
-        summary = (item.findtext("description") or item.findtext("summary") or "").strip()
-        pub = item.findtext("pubDate") or item.findtext("published") or ""
-        items.append({
-            "title": html.unescape(title),
-            "link": link or "",
-            "summary": html.unescape(summary),
-            "published": pub,
-            "source": url,
-        })
-    return items
-
+from hermes_bot.data import BaseCollector, CollectorConfig, DataMode
+from hermes_bot.data.adapters import AdapterRequest, RSSAdapter
+from hermes_bot.schemas import SourceKind
 
 # ---------------------------------------------------------------------------
 # SPEECH COLLECTOR — speeches from CEOs and world leaders (via news RSS)
@@ -83,39 +51,34 @@ class SpeechCollector(BaseCollector):
     name = "speech"
 
     def __init__(self, cfg: CollectorConfig | None = None, feeds: dict | None = None,
-                 max_items: int = 20) -> None:
+                 max_items: int = 20, mode: DataMode = DataMode.OFFLINE_MOCK) -> None:
         super().__init__(cfg)
         # An explicit empty dict is legitimate (no feeds); None gives the default.
         self.feeds = SPEECH_FEEDS if feeds is None else feeds
         self.max_items = max_items
+        self.mode = mode
 
     def collect(self) -> list[dict]:
         """Fetch recent speech items. Offline-safe."""
         if not self.cfg.enabled:
             return []
-        records = []
-        for speaker, url in self.feeds.items():
-            try:
-                items = _fetch_rss(url)[:self.max_items]
-                for it in items:
-                    text = f"{it['title']} {it['summary']}".lower()
-                    is_political = any(k in text for k in TRUMP_KEYWORDS)
-                    is_ceo = any(k in text for k in CEO_KEYWORDS)
-                    records.append({
-                        "source": "speech",
-                        "speaker": speaker,
-                        "headline": it["title"],
-                        "body": it["summary"],
-                        "url": it["link"],
-                        "timestamp": datetime.now(UTC).isoformat(),
-                        "is_political": is_political,
-                        "is_ceo": is_ceo,
-                        "confidence": 0.6 if (is_political or is_ceo) else 0.3,
-                    })
-            except Exception as e:
-                # Offline-safe: log and continue (credibility stays low).
-                print(f"[speech] feed {speaker} mislukt: {e}")
-        return records
+        if self.mode == DataMode.OFFLINE_MOCK:
+            # Offline demo path: never instantiates a network client.
+            if not self.feeds:
+                return []
+            return demo_speech_records()[: self.max_items]
+
+        adapter = RSSAdapter(
+            mode=self.mode,
+            feeds=self.feeds,
+            source_kind=SourceKind.SPEECH,
+            source_id="speech.rss",
+        )
+        request = AdapterRequest(mode=self.mode, source_config={}, max_records=self.max_items)
+        return [
+            _raw_record_to_speech_dict(rec)
+            for rec in adapter.fetch(request)
+        ]
 
 
 # ---------------------------------------------------------------------------
@@ -136,32 +99,32 @@ class ReportCollector(BaseCollector):
     name = "report"
 
     def __init__(self, cfg: CollectorConfig | None = None, feeds: dict | None = None,
-                 max_items: int = 20) -> None:
+                 max_items: int = 20, mode: DataMode = DataMode.OFFLINE_MOCK) -> None:
         super().__init__(cfg)
         self.feeds = REPORT_FEEDS if feeds is None else feeds
         self.max_items = max_items
+        self.mode = mode
 
     def collect(self) -> list[dict]:
         """Fetch recent reports. Offline-safe."""
         if not self.cfg.enabled:
             return []
-        records = []
-        for rtype, url in self.feeds.items():
-            try:
-                items = _fetch_rss(url)[:self.max_items]
-                for it in items:
-                    records.append({
-                        "source": "report",
-                        "report_type": "business" if rtype == "sec" else "overheidsuitgaven",
-                        "headline": it["title"],
-                        "body": it["summary"],
-                        "url": it["link"],
-                        "timestamp": datetime.now(UTC).isoformat(),
-                        "confidence": 0.6,
-                    })
-            except Exception as e:
-                print(f"[report] feed {rtype} mislukt: {e}")
-        return records
+        if self.mode == DataMode.OFFLINE_MOCK:
+            if not self.feeds:
+                return []
+            return demo_report_records()[: self.max_items]
+
+        adapter = RSSAdapter(
+            mode=self.mode,
+            feeds=self.feeds,
+            source_kind=SourceKind.REPORT,
+            source_id="report.rss",
+        )
+        request = AdapterRequest(mode=self.mode, source_config={}, max_records=self.max_items)
+        return [
+            _raw_record_to_report_dict(rec)
+            for rec in adapter.fetch(request)
+        ]
 
 
 # ---------------------------------------------------------------------------
@@ -179,31 +142,78 @@ class AlertCollector(BaseCollector):
     name = "alert"
 
     def __init__(self, cfg: CollectorConfig | None = None, feeds: dict | None = None,
-                 max_items: int = 20) -> None:
+                 max_items: int = 20, mode: DataMode = DataMode.OFFLINE_MOCK) -> None:
         super().__init__(cfg)
         self.feeds = ALERT_FEEDS if feeds is None else feeds
         self.max_items = max_items
+        self.mode = mode
 
     def collect(self) -> list[dict]:
         if not self.cfg.enabled:
             return []
-        records = []
-        for kind, url in self.feeds.items():
-            try:
-                items = _fetch_rss(url)[:self.max_items]
-                for it in items:
-                    records.append({
-                        "source": "alert",
-                        "kind": "news" if kind == "news" else "point_loop",
-                        "headline": it["title"],
-                        "body": it["summary"],
-                        "url": it["link"],
-                        "timestamp": datetime.now(UTC).isoformat(),
-                        "confidence": 0.5,
-                    })
-            except Exception as e:
-                print(f"[alert] feed {kind} mislukt: {e}")
-        return records
+        if self.mode == DataMode.OFFLINE_MOCK:
+            if not self.feeds:
+                return []
+            return demo_alert_records()[: self.max_items]
+
+        adapter = RSSAdapter(
+            mode=self.mode,
+            feeds=self.feeds,
+            source_kind=SourceKind.ALERT,
+            source_id="alert.rss",
+        )
+        request = AdapterRequest(mode=self.mode, source_config={}, max_records=self.max_items)
+        return [
+            _raw_record_to_alert_dict(rec)
+            for rec in adapter.fetch(request)
+        ]
+
+
+def _raw_record_to_speech_dict(rec) -> dict:
+    text = f"{rec.payload.get('title', '')} {rec.payload.get('summary', '')}".lower()
+    is_political = any(k in text for k in TRUMP_KEYWORDS)
+    is_ceo = any(k in text for k in CEO_KEYWORDS)
+    return {
+        "source": "speech",
+        "speaker": rec.metadata.get("feed", "unknown"),
+        "headline": rec.payload.get("title", ""),
+        "body": rec.payload.get("summary", ""),
+        "url": rec.source_uri,
+        "published_time": rec.published_time.isoformat() if rec.published_time else None,
+        "timestamp": rec.ingested_at.isoformat(),
+        "is_political": is_political,
+        "is_ceo": is_ceo,
+        "confidence": 0.6 if (is_political or is_ceo) else 0.3,
+        "quality_flags": list(rec.quality_flags),
+    }
+
+
+def _raw_record_to_report_dict(rec) -> dict:
+    return {
+        "source": "report",
+        "report_type": "business" if rec.metadata.get("feed") == "sec" else "overheidsuitgaven",
+        "headline": rec.payload.get("title", ""),
+        "body": rec.payload.get("summary", ""),
+        "url": rec.source_uri,
+        "published_time": rec.published_time.isoformat() if rec.published_time else None,
+        "timestamp": rec.ingested_at.isoformat(),
+        "confidence": 0.6,
+        "quality_flags": list(rec.quality_flags),
+    }
+
+
+def _raw_record_to_alert_dict(rec) -> dict:
+    return {
+        "source": "alert",
+        "kind": "news" if rec.metadata.get("feed") == "news" else "point_loop",
+        "headline": rec.payload.get("title", ""),
+        "body": rec.payload.get("summary", ""),
+        "url": rec.source_uri,
+        "published_time": rec.published_time.isoformat() if rec.published_time else None,
+        "timestamp": rec.ingested_at.isoformat(),
+        "confidence": 0.5,
+        "quality_flags": list(rec.quality_flags),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -244,6 +254,7 @@ class WebScraper:
 
 def demo_speech_records() -> list[dict]:
     """Offline demo items to test the chain without a network."""
+    ingested = datetime.now(UTC).isoformat()
     return [
         {
             "source": "speech", "speaker": "trump",
@@ -251,7 +262,8 @@ def demo_speech_records() -> list[dict]:
             "body": "We are investing heavily in domestic manufacturing and grid infrastructure. "
                     "Semiconductor and actuator supply must be built in America.",
             "url": "https://example.com/trump/remarks",
-            "timestamp": datetime.now(UTC).isoformat(),
+            "published_time": "2023-01-02T14:00:00+00:00",
+            "timestamp": ingested,
             "is_political": True, "is_ceo": False, "confidence": 0.8,
         },
         {
@@ -260,13 +272,15 @@ def demo_speech_records() -> list[dict]:
             "body": "Our semiconductor equipment order backlog is at record levels. "
                     "Lead times for actuators and power components have doubled.",
             "url": "https://example.com/ceo/earnings",
-            "timestamp": datetime.now(UTC).isoformat(),
+            "published_time": "2023-01-03T09:30:00+00:00",
+            "timestamp": ingested,
             "is_political": False, "is_ceo": True, "confidence": 0.9,
         },
     ]
 
 
 def demo_report_records() -> list[dict]:
+    ingested = datetime.now(UTC).isoformat()
     return [
         {
             "source": "report", "report_type": "business",
@@ -274,7 +288,9 @@ def demo_report_records() -> list[dict]:
             "body": "Revenue grew 65% YoY on AI chip demand. Gross margin expanded. "
                     "Management raised full-year guidance citing supply chain bottlenecks.",
             "url": "https://example.com/nvda/q",
-            "timestamp": datetime.now(UTC).isoformat(), "confidence": 0.8,
+            "published_time": "2023-01-03T16:00:00+00:00",
+            "timestamp": ingested,
+            "confidence": 0.8,
         },
         {
             "source": "report", "report_type": "overheidsuitgaven",
@@ -282,12 +298,15 @@ def demo_report_records() -> list[dict]:
             "body": "New federal budget allocates $50B to semiconductor and grid infrastructure, "
                     "targeting domestic manufacturing capacity.",
             "url": "https://example.com/gov/infra",
-            "timestamp": datetime.now(UTC).isoformat(), "confidence": 0.7,
+            "published_time": None,
+            "timestamp": ingested,
+            "confidence": 0.7,
         },
     ]
 
 
 def demo_alert_records() -> list[dict]:
+    ingested = datetime.now(UTC).isoformat()
     return [
         {
             "source": "alert", "kind": "news",
@@ -295,7 +314,8 @@ def demo_alert_records() -> list[dict]:
             "body": "Actuator and power semiconductor shortages worsen as demand "
                      "outpaces capacity.",
             "url": "https://example.com/news/bottleneck",
-            "timestamp": datetime.now(UTC).isoformat(),
+            "published_time": "2023-01-04T08:00:00+00:00",
+            "timestamp": ingested,
             "confidence": 0.6,
         },
     ]

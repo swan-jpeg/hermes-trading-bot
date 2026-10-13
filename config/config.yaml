@@ -16,6 +16,7 @@ universe:
   regions: [US, EU, JP]
 
 data:
+  mode: offline_mock     # offline_mock | network
   market_feed: yfinance   # yfinance | polygon | alpaca
   storage: postgres       # postgres | sqlite (dev)
   sqlite_path: var/tradingbot.db

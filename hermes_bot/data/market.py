@@ -1,13 +1,17 @@
 """Marktdata-collector: koersen/volumes via yfinance (gratis)."""
 from __future__ import annotations
 
-from datetime import UTC
-
-from hermes_bot.data import BaseCollector, CollectorConfig
+from hermes_bot.data import BaseCollector, CollectorConfig, DataMode
+from hermes_bot.data.adapters import AdapterRequest, MarketDataAdapter
 
 
 class MarketDataCollector(BaseCollector):
-    """Fetches OHLCV + fundamentals for the universe (yfinance to start)."""
+    """Fetches OHLCV + fundamentals for the universe (yfinance to start).
+
+    ``OFFLINE_MOCK`` is the default and returns deterministic synthetic bars
+    without any network call.  The legacy yfinance path is isolated behind
+    ``mode=DataMode.NETWORK``.
+    """
 
     name = "market"
 
@@ -15,42 +19,38 @@ class MarketDataCollector(BaseCollector):
         self,
         cfg: CollectorConfig | None = None,
         symbols: list[str] | None = None,
+        mode: DataMode = DataMode.OFFLINE_MOCK,
     ) -> None:
         super().__init__(cfg)
         self.symbols = symbols or ["AAPL", "MSFT", "SPY"]
+        self.mode = mode
 
     def collect(self) -> list[dict]:
-        """Fetch daily OHLCV via yfinance.
+        """Fetch daily OHLCV.
 
         Records: {symbol, timestamp, open, high, low, close, volume}.
+        ``timestamp`` is kept as the session date (ISO-8601 date string) to
+        avoid faking a precise UTC timestamp for an end-of-day bar.
         """
-        try:
-            import yfinance as yf
-        except ImportError as e:  # pragma: no cover
-            raise RuntimeError("yfinance niet geïnstalleerd: `uv sync --extra data`") from e
+        adapter = MarketDataAdapter(mode=self.mode, symbols=self.symbols)
+        request = AdapterRequest(
+            mode=self.mode,
+            source_config={"symbols": self.symbols},
+            max_records=100,
+        )
+        records = adapter.fetch(request)
+        def _fmt(ts):
+            return ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
 
-        records: list[dict] = []
-        for sym in self.symbols:
-            try:
-                df = yf.download(sym, period="1mo", interval="1d", progress=False, auto_adjust=True)
-                if df is None or df.empty:
-                    continue
-                df = df.reset_index()
-                for _, row in df.iterrows():
-                    ts = row.get("Date") or row.get("Datetime")
-                    records.append(
-                        {
-                            "symbol": sym,
-                            "timestamp": ts.to_pydatetime().replace(tzinfo=UTC)
-                            if hasattr(ts, "to_pydatetime")
-                            else ts,
-                            "open": float(row["Open"]),
-                            "high": float(row["High"]),
-                            "low": float(row["Low"]),
-                            "close": float(row["Close"]),
-                            "volume": float(row["Volume"]),
-                        }
-                    )
-            except Exception as e:  # pragma: no cover
-                print(f"[market] {sym} mislukt: {e}")
-        return records
+        return [
+            {
+                "symbol": rec.payload["symbol"],
+                "timestamp": _fmt(rec.payload["session_date"]),
+                "open": float(rec.payload["open"]),
+                "high": float(rec.payload["high"]),
+                "low": float(rec.payload["low"]),
+                "close": float(rec.payload["close"]),
+                "volume": float(rec.payload["volume"]),
+            }
+            for rec in records
+        ]

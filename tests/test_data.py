@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 from pydantic import ValidationError
 
+from hermes_bot.data import DataMode
 from hermes_bot.data.catalog import Catalog, CatalogValidationError
 from hermes_bot.data.market import MarketDataCollector
 from hermes_bot.data.migrations import Migration, MigrationError, MigrationRunner
@@ -69,7 +70,7 @@ def test_market_collector_idempotent(tmp_path) -> None:
         mock_download.return_value = mock_df
 
         # Create a collector and store
-        collector = MarketDataCollector(symbols=["AAPL"])
+        collector = MarketDataCollector(symbols=["AAPL"], mode=DataMode.NETWORK)
         store = SQLiteStore(tmp_path / "test.db")
 
         # Collect 2x -> storage has no duplicates
@@ -102,7 +103,7 @@ def test_market_collector_empty_result() -> None:
         mock_download.return_value = None
 
         # Create a collector
-        collector = MarketDataCollector(symbols=["AAPL"])
+        collector = MarketDataCollector(symbols=["AAPL"], mode=DataMode.NETWORK)
 
         # Collect -> must not error
         records = collector.collect()

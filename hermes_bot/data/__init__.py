@@ -2,6 +2,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
+
+
+class DataMode(StrEnum):
+    """Execution mode for data adapters."""
+
+    OFFLINE_MOCK = "offline_mock"
+    NETWORK = "network"
 
 
 @dataclass
@@ -12,6 +20,7 @@ class CollectorConfig:
     enabled: bool = True
     interval_sec: int = 3600
     retries: int = 3
+    mode: DataMode = DataMode.OFFLINE_MOCK
 
 
 class BaseCollector:

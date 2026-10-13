@@ -1,7 +1,7 @@
 """Shared schemas (pydantic) for all modules — the 'language' between layers."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -35,6 +35,8 @@ class AssetClass(StrEnum):
 
 
 class SourceKind(StrEnum):
+    """Allowed source kinds for provenance records."""
+
     SPEECH = "speech"
     AUDIO = "audio"
     VIDEO = "video"
@@ -42,6 +44,55 @@ class SourceKind(StrEnum):
     ALERT = "alert"
     REGIONAL = "regional"
     MARKET = "market"
+
+
+class Adjustment(StrEnum):
+    """Price adjustment semantics for a market bar (§4.2)."""
+
+    RAW = "raw"
+    SPLIT_ADJUSTED = "split_adjusted"
+    TOTAL_RETURN_ADJUSTED = "total_return_adjusted"
+
+
+class MarketBar(BaseModel):
+    """Canonical OHLCV bar contract (execution package §4.2).
+
+    ``session_date`` is an exchange session date — never a fake UTC timestamp.
+    ``interval_start``/``interval_end`` are timezone-aware UTC timestamps when
+    known; for a daily bar these may be ``null``.  ``available_at`` is the
+    point-in-time at which the bar is safe to use.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    instrument_id: str = Field(min_length=1)
+    source_id: str = Field(min_length=1)
+    interval: str = Field(min_length=1)
+    session_date: date
+    exchange_mic: str | None = None
+    interval_start: datetime | None = None
+    interval_end: datetime | None = None
+    available_at: datetime
+    currency: str = Field(min_length=3, max_length=3)
+    open: float = Field(gt=0.0)
+    high: float = Field(gt=0.0)
+    low: float = Field(gt=0.0)
+    close: float = Field(gt=0.0)
+    volume: float = Field(ge=0.0)
+    adjustment: Adjustment = Adjustment.RAW
+    source_revision: str | None = None
+    quality_flags: list[str] = Field(default_factory=list)
+
+    @property
+    def dedup_key(self) -> str:
+        """Stable idempotency key for this bar.
+
+        Combines source ID, interval, session date and source revision.
+        """
+        parts = [self.source_id, self.interval, self.session_date.isoformat()]
+        if self.source_revision:
+            parts.append(self.source_revision)
+        return "|".join(parts)
 
 
 class BaseSignal(BaseModel):
