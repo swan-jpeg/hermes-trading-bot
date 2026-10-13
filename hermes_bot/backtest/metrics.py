@@ -30,3 +30,7 @@ class BacktestResult(BaseModel):
     scenario_stress: dict[str, float] = {}
     # Bootstrap confidence intervals of mean/Sharpe/max-drawdown ([[08]] point 4).
     confidence_intervals: dict = {}
+    # Causal execution + cost accounting.
+    gross_returns: list[float] = []  # returns before trading costs
+    net_returns: list[float] = []  # returns after trading costs (primary returns)
+    total_costs: float = 0.0  # sum of commission + slippage paid

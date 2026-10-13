@@ -34,16 +34,21 @@ class _Trade:
 
 def _sharpe(returns: np.ndarray) -> float:
     r = np.asarray(returns, dtype=float)
-    if r.size == 0 or r.std() == 0:
+    if r.size == 0:
         return 0.0
-    return float(r.mean() / r.std() * np.sqrt(252))
+    std = r.std()
+    if std == 0:
+        return 0.0
+    return float(r.mean() / std * np.sqrt(252))
 
 
 def _sortino(returns: np.ndarray) -> float:
     r = np.asarray(returns, dtype=float)
+    if r.size == 0:
+        return 0.0
     downside = np.minimum(r, 0.0)
     ds = downside.std()
-    if r.size == 0 or ds == 0:
+    if ds == 0:
         return 0.0
     return float(r.mean() / ds * np.sqrt(252))
 
@@ -167,12 +172,38 @@ class BuyAndHoldStrategy(Strategy):
 
 
 class Backtester:
-    """Event-driven backtester: strategy + RiskEngine over a price series."""
+    """Event-driven backtester: strategy + RiskEngine over a price series.
+
+    Execution semantics (causal / next-bar fill):
+      * The strategy decides at the close of bar t.
+      * The approved target exposure is filled at the next bar: open[t+1] if
+        available, otherwise close[t+1]. This is documented as an approximation.
+      * Daily returns are mark-to-market at the close. No decision can earn a
+        return that was already realized before the decision.
+      * Costs are deducted from cash when a fill happens:
+          commission = notional * commission_bps / 10_000
+          slippage   = notional * slippage_bps / 10_000
+        where notional is the absolute traded value.
+      * `net_returns` is the exact mark-to-market return of the equity path
+        (`equity[i] / equity[i-1] - 1`), with costs already reflected in cash.
+      * `gross_returns` adds the per-bar cost back to `net_returns` as a
+        first-order approximation (`gross[i] ≈ net[i] + bar_cost[i]/equity[i-1]`).
+        It is not a fully cost-free parallel path because costs also affect
+        compounding and position sizing.
+    """
 
     def __init__(self, config: dict | None = None) -> None:
         self.cfg = config or {}
         self.risk = None
         self.mc = None
+        # Default to zero for backward compatibility in tests; evaluation configs
+        # must set explicit values.
+        self.commission_bps = float(self.cfg.get("commission_bps", 0.0))
+        self.slippage_bps = float(self.cfg.get("slippage_bps", 0.0))
+
+    def _cost(self, notional: float) -> float:
+        """Total trading cost (commission + slippage) for the given notional."""
+        return notional * (self.commission_bps + self.slippage_bps) / 10_000.0
 
     def _mc_from_returns(self, returns: np.ndarray) -> MonteCarloResult | None:
         try:
@@ -197,29 +228,98 @@ class Backtester:
 
         # ---------- RISK ENGINE (the hard layer) ----------
         from hermes_bot.risk import RiskEngine
-        self.risk = RiskEngine(risk_config or self.cfg)
+        cfg = risk_config or self.cfg
+        self.risk = RiskEngine(cfg)
+        # Allow per-call overrides of cost config as well.
+        self.commission_bps = float(cfg.get("commission_bps", self.commission_bps))
+        self.slippage_bps = float(cfg.get("slippage_bps", self.slippage_bps))
 
         cash = initial_capital
         portfolio = PortfolioState(cash=cash, regime="unknown")
-        equity = []
-        timestamps = []
+        equity: list[float] = []
+        timestamps: list[datetime] = []
         closed_trades: list[_Trade] = []
-        daily_returns: list[float] = []
+        gross_returns: list[float] = []
+        net_returns: list[float] = []
         qty = 0.0
         entry_price = 0.0
         peak = 0.0
+        total_costs = 0.0
+        bar_cost = 0.0
 
         closes = prices["close"].to_numpy(dtype=float)
+        opens = (
+            prices["open"].to_numpy(dtype=float)
+            if "open" in prices.columns
+            else closes.copy()
+        )
         idx_list = prices.index.tolist()
+
+        if closes.size == 0:
+            return BacktestResult(
+                initial_capital=initial_capital,
+                final_capital=initial_capital,
+                equity_curve=[],
+                timestamps=[],
+                returns=[],
+                gross_returns=[],
+                net_returns=[],
+                sharpe_ratio=0.0,
+                sortino_ratio=0.0,
+                max_drawdown=0.0,
+                win_rate=0.0,
+                benchmark_return=0.0,
+                total_costs=0.0,
+            )
+
+        # pending target exposure decided at the close of bar i, filled at bar i+1.
+        pending_target_weight = 0.0
 
         for i, t in enumerate(idx_list):
             price = float(closes[i])
-            row = prices.iloc[i]
-            price = float(price)
             if price <= 0:
                 continue
+            row = prices.iloc[i]
+            fill_price = float(opens[i] if opens[i] > 0 else price)
             peak = max(peak, price)
             portfolio.peaks = {"asset": peak}
+            bar_cost = 0.0
+
+            # ---- Execute at the open of bar i the decision made at close of bar i-1 ----
+            # Mark-to-market at the fill price so target sizing is self-consistent
+            # and a rebalance cannot create same-day value out of thin air.
+            total_value = cash + qty * fill_price
+            target_weight = pending_target_weight
+            target_qty = (
+                target_weight * total_value / fill_price
+                if fill_price > 0 and total_value > 0
+                else 0.0
+            )
+            target_qty = max(0.0, min(target_qty, total_value / fill_price))
+
+            if target_qty > qty + 1e-9:  # buy more
+                notional = (target_qty - qty) * fill_price
+                cost = self._cost(notional)
+                bar_cost += cost
+                total_costs += cost
+                cash -= notional + cost
+                if entry_price <= 0:
+                    entry_price = fill_price
+                qty = target_qty
+                peak = max(peak, fill_price)
+            elif target_qty < qty - 1e-9 and qty > 0:  # sell (partly)
+                notional = (qty - target_qty) * fill_price
+                cost = self._cost(notional)
+                bar_cost += cost
+                total_costs += cost
+                cash += notional - cost
+                if target_qty <= 1e-9:
+                    closed_trades.append(_Trade(entry_price, fill_price, qty))
+                    qty = 0.0
+                    entry_price = 0.0
+                else:
+                    qty = target_qty
+
             # Sync the real position back to the portfolio so the strategy
             # and RiskEngine see the open position (price awareness).
             if qty > 0:
@@ -235,48 +335,34 @@ class Backtester:
                 portfolio.positions = {}
                 portfolio.cash = cash
 
-            # Strategy proposes; RiskEngine approves.
+            # Strategy proposes at the close; RiskEngine approves.
             decision = strategy.decide(i, row, portfolio)
 
             # Monte Carlo for crash resilience (periodic, not every day).
             mc = None
-            if len(daily_returns) >= 30 and i % 20 == 0:
-                mc = self._mc_from_returns(np.asarray(daily_returns[-60:]))
+            if len(net_returns) >= 30 and i % 20 == 0:
+                mc = self._mc_from_returns(np.asarray(net_returns[-60:]))
 
             approval = self.risk.approve(decision, portfolio, mc)
 
-            # ---- Execute goedgekeurde allocatie (target-volgend, fail-closed) ----
-            total_value = cash + qty * price
-            target_weight = (
+            # Target exposure for the next bar.
+            pending_target_weight = (
                 approval.target_alloc.get(decision.entity, 0.0)
-                if approval.approved else 0.0
+                if approval.approved
+                else 0.0
             )
-            target_qty = (
-                target_weight * total_value / price
-                if price > 0 and total_value > 0 else 0.0
-            )
-            target_qty = max(0.0, min(target_qty, total_value / price))
-            if target_qty > qty + 1e-9:  # koop meer
-                cash -= (target_qty - qty) * price
-                if entry_price <= 0:
-                    entry_price = price
-                qty = target_qty
-                peak = max(peak, price)
-            elif target_qty < qty - 1e-9 and qty > 0:  # verkoop (deels)
-                proceeds = (qty - target_qty) * price
-                cash += proceeds
-                if target_qty <= 1e-9:
-                    closed_trades.append(_Trade(entry_price, price, qty))
-                    qty = 0.0
-                    entry_price = 0.0
-                else:
-                    qty = target_qty
 
+            # Mark-to-market at the close and record daily returns.
             total_value = cash + qty * price
             if equity:
-                daily_returns.append(total_value / equity[-1] - 1.0)
+                prev_equity = equity[-1]
+                net_ret = total_value / prev_equity - 1.0
+                gross_ret = net_ret + (bar_cost / prev_equity if prev_equity > 0 else 0.0)
             else:
-                daily_returns.append(0.0)
+                net_ret = 0.0
+                gross_ret = 0.0
+            net_returns.append(net_ret)
+            gross_returns.append(gross_ret)
             equity.append(total_value)
             timestamps.append(t)
 
@@ -287,7 +373,7 @@ class Backtester:
         benchmark_return = (bench_final - initial_capital) / initial_capital
 
         # ---- Metrics ----
-        rets = np.asarray(daily_returns[1:], dtype=float)
+        rets = np.asarray(net_returns[1:], dtype=float)
         sharpe = _sharpe(rets)
         sortino = _sortino(rets)
         eq = np.asarray(equity, dtype=float)
@@ -316,13 +402,13 @@ class Backtester:
             final_capital=float(equity[-1]) if equity else initial_capital,
             equity_curve=[float(x) for x in equity],
             timestamps=timestamps,
-            returns=[float(x) for x in daily_returns],
+            returns=[float(x) for x in net_returns],
             sharpe_ratio=sharpe,
             sortino_ratio=sortino,
             max_drawdown=max_dd,
             win_rate=win_rate,
             benchmark_return=benchmark_return,
-            strategy_returns=[float(x) for x in daily_returns],
+            strategy_returns=[float(x) for x in net_returns],
             # metadata
             n_trades=len(closed_trades),
             total_return=total_return,
@@ -332,6 +418,10 @@ class Backtester:
             final_exposure=final_exposure,
             scenario_stress=scenario_stress,
             confidence_intervals=confidence_intervals,
+            # gross / net cost labels
+            gross_returns=[float(x) for x in gross_returns],
+            net_returns=[float(x) for x in net_returns],
+            total_costs=round(total_costs, 2),
         )
 
 

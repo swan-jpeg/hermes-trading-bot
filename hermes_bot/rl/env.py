@@ -109,18 +109,24 @@ class TradingEnv(gym.Env):
         return self._get_observation(), {}
 
     def step(self, action: int):
-        """Take a step in the environment."""
+        """Take a step in the environment.
+
+        Chronology: at index t the agent observes the state, chooses an action,
+        and the action is applied at the current close. The reward is the
+        t -> t+1 return earned by that exposure (next-bar fill). No action can
+        earn a return that was already realized before the decision.
+        """
         if action not in (0, 1, 2):
             raise ValueError(f"Invalid action: {action}")
 
         price = self._current_price()
-        prev_price = self.prices[max(0, self.current_step - 1)] if self.current_step > 0 else price
+        next_price = self._next_price()
 
-        # Apply the action to the portfolio.
+        # Apply the action to the portfolio at the current close.
         self._apply_action(int(action), price)
 
-        # Daily return of the portfolio (allocation * price move).
-        price_ret = (price - prev_price) / prev_price if prev_price > 0 else 0.0
+        # Daily return of the portfolio (allocation * next-bar price move).
+        price_ret = (next_price - price) / price if price > 0 else 0.0
         port_ret = self.allocation * price_ret
         self._returns.append(port_ret)
 
@@ -169,6 +175,10 @@ class TradingEnv(gym.Env):
 
     def _current_price(self) -> float:
         return float(self.prices[min(self.current_step, len(self.prices) - 1)])
+
+    def _next_price(self) -> float:
+        """Price used to compute the next-bar return (t -> t+1)."""
+        return float(self.prices[min(self.current_step + 1, len(self.prices) - 1)])
 
     def _get_observation(self) -> np.ndarray:
         """Build the rich observation vector from the AssetContext.

@@ -17,10 +17,15 @@ def run_backtest(
     use_live: bool = True,
     vol_target: float = 0.125,
     max_weight: float = 0.95,
+    commission_bps: float = 0.0,
+    slippage_bps: float = 0.0,
 ) -> dict:
     """Run a backtest and return a JSON-serializable dict.
 
     use_live=True -> echte marktdata via yfinance; anders synthetic.
+    commission_bps/slippage_bps: trading costs in basis points. Defaults are 0
+    for backward compatibility; production/evaluation configs must set them
+    explicitly.
     """
     try:
         if use_live:
@@ -40,7 +45,11 @@ def run_backtest(
             "max_crash_prob": 0.30,
         }
     }
-    r = Backtester().run(prices, strategy, risk_config=risk_cfg)
+    backtest_cfg = {
+        "commission_bps": commission_bps,
+        "slippage_bps": slippage_bps,
+    }
+    r = Backtester(backtest_cfg).run(prices, strategy, risk_config=risk_cfg)
 
     # Pack into JSON for the webui chart.
     n = len(r.equity_curve)
@@ -73,6 +82,11 @@ def run_backtest(
         "final_exposure": round(r.final_exposure, 4),
         "scenario_stress": r.scenario_stress,
         "confidence_intervals": r.confidence_intervals,
+        "commission_bps": commission_bps,
+        "slippage_bps": slippage_bps,
+        "total_costs": r.total_costs,
+        "gross_returns": [round(x, 6) for x in r.gross_returns],
+        "net_returns": [round(x, 6) for x in r.net_returns],
     }
 
 

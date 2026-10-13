@@ -87,24 +87,51 @@ def load_prices(ticker: str, years: int) -> np.ndarray:
     return 100.0 * np.cumprod(1 + rets)
 
 
+def _trailing_momentum(prices: np.ndarray, window: int = 5) -> tuple[np.ndarray, np.ndarray]:
+    """Trailing-only returns and momentum for the given price series.
+
+    Returns `(rets, mom)` where `mom[i]` is the mean of `rets[i-window+1:i+1]`
+    (the last `window` returns up to and including index `i`). The first
+    `window-1` momentum values are NaN because a full trailing window is not
+    yet available. This guarantees that `mom[i]` never depends on prices after
+    index `i`.
+    """
+    rets = np.diff(prices, prepend=prices[0]) / prices[0]
+    if len(prices) < window:
+        mom = np.full_like(rets, np.nan)
+        return rets, mom
+    # 'valid' gives the trailing window ending at each index with a full window.
+    mom_valid = np.convolve(rets, np.ones(window) / window, mode="valid")
+    # Pad the first window-1 values with NaN: no future information is used.
+    mom = np.pad(mom_valid, (window - 1, 0), constant_values=np.nan)
+    return rets, mom
+
+
 def build_fusion_signals(prices: np.ndarray, seed: int = 42) -> list[dict]:
     """Synthetic fusion signals (sentiment/certainty/quality) per day.
 
     In production these come from the fusion model; for training we generate
     plausible signals so the agent learns the mapping signal -> action.
+    All signals are trailing-only: signal at index i depends only on prices
+    up to and including index i.
     """
     rng = np.random.default_rng(seed)
     n = len(prices)
-    # Sentiment loosely follows the price momentum.
-    rets = np.diff(prices, prepend=prices[0]) / prices[0]
-    mom = np.convolve(rets, np.ones(5) / 5, mode="same")
+    rets, mom = _trailing_momentum(prices, window=5)
     signals = []
     for i in range(n):
-        s = float(np.clip(mom[i] * 20, -1, 1)) + float(rng.normal(0, 0.1))
+        if not np.isnan(mom[i]):
+            s = float(np.clip(mom[i] * 20, -1, 1)) + float(rng.normal(0, 0.1))
+        else:
+            # Fall back to just the most recent price change for early periods.
+            recent_change = 0.0 if i < 1 else rets[i] * 20
+            s = float(np.clip(recent_change, -1, 1)) + float(rng.normal(0, 0.1))
         signals.append({
             "sentiment": float(np.clip(s, -1, 1)),
             "zekerheid": float(np.clip(0.5 + abs(s) * 0.3, 0, 1)),
-            "kwaliteit": float(np.clip(0.5 + mom[i] * 5, 0, 1)),
+            "kwaliteit": float(np.clip(
+                0.5 + (mom[i] if not np.isnan(mom[i]) else rets[i]) * 5, 0, 1
+            )),
         })
     return signals
 
@@ -120,11 +147,13 @@ def build_asset_contexts(prices: np.ndarray, signals: list[dict],
     """
     rng = np.random.default_rng(seed)
     n = len(prices)
-    rets = np.diff(prices, prepend=prices[0]) / prices[0]
-    mom = np.convolve(rets, np.ones(5) / 5, mode="same")
+    rets, mom = _trailing_momentum(prices, window=5)
     contexts = []
     for i in range(n):
-        s = float(np.clip(mom[i] * 20, -1, 1))
+        # Trailing-only momentum: use the full trailing window when available,
+        # otherwise fall back to the most recent return so no future price leaks.
+        m = mom[i] if not np.isnan(mom[i]) else (rets[i] if i > 0 else 0.0)
+        s = float(np.clip(m * 20, -1, 1))
         ctx = AssetContext(
             entity="SPY", asset_class="etf",
             # Categorie 1 — impact-vector (kern)

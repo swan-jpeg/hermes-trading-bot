@@ -148,3 +148,76 @@ def test_asset_context_observation_dim() -> None:
     env = _make_env()
     assert ctx.obs_dim == env.observation_space.shape[0]
     assert ctx.observation().shape == (len(_OBS_KEYS),)
+
+
+def test_observation_is_causal_no_future_leak() -> None:
+    """Changing all prices after index t must not change observation at t.
+
+    The observation must be trailing-only: it can depend on prices[0:t+1]
+    but never on prices[t+1:].
+    """
+    n = 20
+    base_prices = np.linspace(100, 150, n)
+    contexts = [
+        AssetContext(impact_direction=float(i) / n) for i in range(n)
+    ]
+    env1 = _make_env_with_prices(base_prices, contexts)
+    obs1, _ = env1.reset()
+    # Perturb every future price after index 5.
+    perturbed_prices = base_prices.copy()
+    perturbed_prices[6:] = perturbed_prices[6:] * 2.0 + 50.0
+    env2 = _make_env_with_prices(perturbed_prices, contexts)
+    obs2, _ = env2.reset()
+    # Reset gives observation at index 0, which is before the perturbation starts.
+    np.testing.assert_array_equal(obs1, obs2)
+
+    # Step to index 5: observation at t=5 must still be identical.
+    env1.reset()
+    env2.reset()
+    for _ in range(5):
+        env1.step(0)
+        env2.step(0)
+    obs1_t5, *_ = env1.step(0)
+    obs2_t5, *_ = env2.step(0)
+    np.testing.assert_array_almost_equal(obs1_t5, obs2_t5)
+
+
+def test_action_earns_next_bar_return_only() -> None:
+    """A BUY action at t must earn the t -> t+1 return, not t-1 -> t."""
+    prices = np.array([100.0, 110.0, 120.0, 130.0])
+    env = _make_env_with_prices(prices, [AssetContext()] * len(prices))
+    env.reset()
+    # Step 0: BUY at close 100. Reward should reflect 100 -> 110 (+10%).
+    _obs, reward, _done, _trunc, _info = env.step(1)
+    # Allocation is 0.5 by default, so return = 0.5 * 0.10 = 0.05.
+    # Turnover penalty is small (0.5 * 0.02 = 0.01), so net reward ≈ 0.04.
+    assert reward > 0.03, f"expected positive next-bar reward, got {reward}"
+    # The t-1 -> t return did not exist (no previous bar), so this also
+    # proves the action cannot harvest a realized return.
+
+
+def test_known_two_bar_return() -> None:
+    """Hand-check: buy at 100, next close 110, 50% allocation -> reward 0.04."""
+    prices = np.array([100.0, 110.0])
+    env = _make_env_with_prices(prices, [AssetContext()] * len(prices))
+    env.reset()
+    _obs, reward, _done, _trunc, _info = env.step(1)
+    expected_gross = 0.5 * (110.0 - 100.0) / 100.0  # 0.05
+    turnover_penalty = 0.02 * 0.5  # lam_to * turnover
+    expected_reward = expected_gross - turnover_penalty
+    assert abs(reward - expected_reward) < 1e-9
+
+
+def _make_env_with_prices(
+    prices: np.ndarray, contexts: list[AssetContext]
+) -> TradingEnv:
+    signals = [{"sentiment": 0.0, "zekerheid": 0.5, "kwaliteit": 0.5}] * len(prices)
+    return TradingEnv(
+        prices=prices,
+        fusion_signals=signals,
+        portfolio_state=PortfolioState(cash=100_000.0),
+        risk_engine=None,
+        rule_policy=RulePolicy(),
+        max_steps=len(prices),
+        asset_contexts=contexts,
+    )
