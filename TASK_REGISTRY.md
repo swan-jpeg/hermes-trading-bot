@@ -52,6 +52,7 @@ Allowed states: `BACKLOG`, `READY`, `IN_PROGRESS`, `REVIEW`, `VERIFIED`, `BLOCKE
 | T15 | Optional supervised or RL research study | P3 | T03, T09, T11; user approval | NEEDS_APPROVAL | v1 | — | — | — | REQUIRED (data/training/compute) | Do not start without exact approval |
 | T16 | Optional real broker integration (paper only) | P0 safety | T01, T09, T10, T12; separate approval | NEEDS_APPROVAL | v1 | — | — | — | REQUIRED (account connection) | Paper only; live never included |
 | T17 | Benchmark-driven scale review | P3 | T06, T07, T12; measurements | VERIFIED | v1 | master @ 0047377 (committed) | benchmark/ (new: generator/runner/__main__/__init__), tests/test_benchmark_smoke.py (new) | `pytest tests/test_benchmark_smoke.py` = 5 passed; ruff clean | none | CEO-verified 2026-10-13; full-dataset determinism + differs-by-seed probed; 0 network; kanban t_125bf935 (FAILED) → t_0643057a (c1 GREEN) |
+| T18 | Weighted multi-method correlation graph (offline infrastructure) | — | T04, T06 | IN_PROGRESS | v1 | master @ 8ce31dc | — | — | none | NIEUW (gebruikersspec, buiten package); offline/mock; kanban dispatch 2026-10-13 |
 
 ## Task completion notes (append below, newest first)
 
