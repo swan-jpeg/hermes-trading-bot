@@ -120,7 +120,7 @@ def test_migration_creates_ledger_and_health_tables(tmp_path) -> None:
     assert "ledger_entry" in tables
     assert "health_state" in tables
     runner = MigrationRunner(conn)
-    assert runner.current_version() == 2
+    assert runner.current_version() == 3
 
 
 def test_reconstruct_complete_mock_cycle(ledger) -> None:

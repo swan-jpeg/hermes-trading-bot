@@ -302,6 +302,56 @@ def _create_ledger_schema(conn: sqlite3.Connection) -> None:
     )
 
 
+def _create_correlation_schema(conn: sqlite3.Connection) -> None:
+    """v3: weighted multi-method correlation graph (T18).
+
+    JSON columns store the node/relation embedding vectors and the per-method
+    scores/weights.  Non-destructive: only adds new tables and indexes.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS correlation_node (
+            node_id TEXT PRIMARY KEY,
+            node_type TEXT NOT NULL,
+            embedding TEXT NOT NULL,
+            as_of TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS correlation_edge (
+            edge_id TEXT PRIMARY KEY,
+            node_a TEXT NOT NULL REFERENCES correlation_node(node_id),
+            node_b TEXT NOT NULL REFERENCES correlation_node(node_id),
+            as_of TEXT NOT NULL,
+            window INTEGER NOT NULL,
+            method_scores TEXT NOT NULL,
+            method_weights TEXT NOT NULL,
+            correlation_score REAL NOT NULL,
+            certainty REAL NOT NULL,
+            relation_type TEXT,
+            relation_embedding TEXT NOT NULL,
+            evidence TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_correlation_edge_node_a
+        ON correlation_edge(node_a)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_correlation_edge_node_b
+        ON correlation_edge(node_b)
+        """
+    )
+
+
 # ---------------------------------------------------------------------------
 # Public migration registry
 # ---------------------------------------------------------------------------
@@ -310,6 +360,7 @@ MIGRATIONS: list[Migration] = [
     Migration(version=0, name="legacy_market_data", apply=_create_legacy_market_data),
     Migration(version=1, name="canonical_catalog", apply=_create_catalog_schema),
     Migration(version=2, name="decision_ledger", apply=_create_ledger_schema),
+    Migration(version=3, name="correlation_graph", apply=_create_correlation_schema),
 ]
 
 

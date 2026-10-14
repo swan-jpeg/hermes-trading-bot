@@ -141,13 +141,13 @@ def test_fresh_schema_creates_all_catalog_tables(tmp_path) -> None:
         "health_state",
     }
     assert expected <= tables
-    assert store.current_schema_version() == 2
+    assert store.current_schema_version() == 3
 
 
 def test_migrations_are_idempotent(tmp_path) -> None:
     store = SQLiteStore(tmp_path / "idempotent.db")
     assert store.migrate() == []
-    assert store.current_schema_version() == 2
+    assert store.current_schema_version() == 3
 
 
 def test_legacy_upgrade_preserves_market_data(tmp_path) -> None:
@@ -178,7 +178,7 @@ def test_legacy_upgrade_preserves_market_data(tmp_path) -> None:
     raw.close()
 
     store = SQLiteStore(legacy)
-    assert store.current_schema_version() == 2
+    assert store.current_schema_version() == 3
     rows = store.conn.execute(
         "SELECT * FROM market_data ORDER BY timestamp"
     ).fetchall()
