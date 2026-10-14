@@ -51,9 +51,27 @@ Allowed states: `BACKLOG`, `READY`, `IN_PROGRESS`, `REVIEW`, `VERIFIED`, `BLOCKE
 | T14 | Optional real source connector pilot | P2 | T05; user approval | NEEDS_APPROVAL | v1 | — | — | — | REQUIRED (source/requests) | Do not start without exact approval |
 | T15 | Optional supervised or RL research study | P3 | T03, T09, T11; user approval | NEEDS_APPROVAL | v1 | — | — | — | REQUIRED (data/training/compute) | Do not start without exact approval |
 | T16 | Optional real broker integration (paper only) | P0 safety | T01, T09, T10, T12; separate approval | NEEDS_APPROVAL | v1 | — | — | — | REQUIRED (account connection) | Paper only; live never included |
-| T17 | Benchmark-driven scale review | P3 | T06, T07, T12; measurements | FAILED→c1 | v1 | master @ de58025 (working tree) | benchmark/ (new: generator/runner/__main__/__init__), tests/test_benchmark_smoke.py (new) | `pytest tests/test_benchmark_smoke.py` = 4 passed; ruff clean — but generator not fully deterministic (random embedding_id) | none | CEO probe: entity/source/doc/edge/evidence/timestamps deterministic, but emb_<uuid4> differs per run -> violates "generator deterministic"; corrective dispatched |
+| T17 | Benchmark-driven scale review | P3 | T06, T07, T12; measurements | VERIFIED | v1 | master @ 0047377 (committed) | benchmark/ (new: generator/runner/__main__/__init__), tests/test_benchmark_smoke.py (new) | `pytest tests/test_benchmark_smoke.py` = 5 passed; ruff clean | none | CEO-verified 2026-10-13; full-dataset determinism + differs-by-seed probed; 0 network; kanban t_125bf935 (FAILED) → t_0643057a (c1 GREEN) |
 
 ## Task completion notes (append below, newest first)
+
+### T17 — Benchmark-driven scale review
+
+```text
+Task ID / prompt version: T17 / v1  (attempts: t_125bf935 FAILED, t_0643057a GREEN)
+Status: VERIFIED (commit 0047377)
+Branch / commit: master @ 0047377 (committed)
+Files changed: hermes_bot/benchmark/ (generator.py, runner.py, __main__.py, __init__.py), tests/test_benchmark_smoke.py
+Tests: `pytest tests/test_benchmark_smoke.py` = 5 passed. Broader offline suite green. ruff clean.
+Acceptance evidence (CEO probes): generate_dataset(n, seed) fully deterministic (asdict equal across
+  two same-seed calls, incl. embedding IDs = emb_<uuid5>); different seed differs; 0 network calls;
+  no persistent DB. Measures sqlite insert/query, graph 3-hop traversal, exact 384-d vector search,
+  pipeline cycle; records env/hardware/wall-time/peak-RSS/command/seed; evidence-based recommendation.
+Approval reference and bounded operation: none (local synthetic benchmark only; smoke <=1000 records)
+Deviations / blockers: 1st attempt left random embedding_id (emb_<uuid4>) -> generator not fully
+  deterministic -> FAILED; fixed in corrective T17-c1 (seed-derived uuid5 ids + strengthened test).
+Reviewer and date: CEO agent, 2026-10-13
+```
 
 ### T03 — Causal RL environment and cost-aware backtest timing
 
