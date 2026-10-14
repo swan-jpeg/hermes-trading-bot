@@ -52,9 +52,34 @@ Allowed states: `BACKLOG`, `READY`, `IN_PROGRESS`, `REVIEW`, `VERIFIED`, `BLOCKE
 | T15 | Optional supervised or RL research study | P3 | T03, T09, T11; user approval | NEEDS_APPROVAL | v1 | — | — | — | REQUIRED (data/training/compute) | Do not start without exact approval |
 | T16 | Optional real broker integration (paper only) | P0 safety | T01, T09, T10, T12; separate approval | NEEDS_APPROVAL | v1 | — | — | — | REQUIRED (account connection) | Paper only; live never included |
 | T17 | Benchmark-driven scale review | P3 | T06, T07, T12; measurements | VERIFIED | v1 | master @ 0047377 (committed) | benchmark/ (new: generator/runner/__main__/__init__), tests/test_benchmark_smoke.py (new) | `pytest tests/test_benchmark_smoke.py` = 5 passed; ruff clean | none | CEO-verified 2026-10-13; full-dataset determinism + differs-by-seed probed; 0 network; kanban t_125bf935 (FAILED) → t_0643057a (c1 GREEN) |
-| T18 | Weighted multi-method correlation graph (offline infrastructure) | — | T04, T06 | IN_PROGRESS | v1 | master @ 8ce31dc | — | — | none | NIEUW (gebruikersspec, buiten package); offline/mock; kanban dispatch 2026-10-13 |
+| T18 | Weighted multi-method correlation graph (offline infrastructure) | — | T04, T06 | VERIFIED | v1 | master @ 26ce347 (committed) | correlation/ (new: schemas/methods/weighting/graph/repository/__init__), data/migrations.py (+v3), tests/test_correlation.py | `pytest tests/test_correlation.py` = 18 passed; ruff clean | none | NIEUW (gebruikersspec); CEO-probes: weights som 1.0 + embedding-afhankelijk, 4 methoden, cap 50, effective_correlation direct-only (A-B-C ≠ A-C), partial_correlation werkt, migratie v3, 0 netwerk; kanban t_dec942e7 |
 
 ## Task completion notes (append below, newest first)
+
+### T18 — Weighted multi-method correlation graph (offline infrastructure)
+
+```text
+Task ID / prompt version: T18 / v1  (user-specified; no package version)
+Status: VERIFIED (commit 26ce347)
+Branch / commit: master @ 26ce347 (committed)
+Files changed: hermes_bot/correlation/ (schemas.py, methods.py, weighting.py, graph.py, repository.py,
+  __init__.py), hermes_bot/data/migrations.py (migration v3: correlation_node, correlation_edge),
+  tests/test_correlation.py (new), tests/test_data.py + tests/test_ledger.py (version 2->3)
+Tests: `pytest tests/test_correlation.py` = 18 passed; broad suite green; ruff clean.
+Acceptance evidence (CEO probes): method_weights sum to 1.0 (4 methods: rolling_pearson, spearman,
+  kendall_tau, dynamic_conditional); weights change when a node embedding changes (deterministic,
+  no training); every edge carries correlation_score, certainty, relation_embedding (384-d);
+  effective_correlation(a,c) == 0.0 when only a-b and b-c edges exist (NO transitive inflation) and
+  returns the direct edge score otherwise; partial_correlation(a,c,control=[b]) differs from raw
+  Pearson; cap = 50 edges per node enforced; migration v3 = [0,1,2,3] with ledger tables kept and
+  idempotent re-run []; 0 network calls.
+Approval reference and bounded operation: none (offline/synthetic, mock embeddings, 10 nodes; no model
+  download, no training, no network). Package T13 (model download) remains closed and unchanged.
+Deviations / blockers: none. Design defaults chosen by CEO (clarify unanswered): deterministic
+  softmax-over-cosine weighting via fixed per-method projection vectors; direct-only effective
+  correlation + partial correlation against common neighbours.
+Reviewer and date: CEO agent, 2026-10-13
+```
 
 ### T17 — Benchmark-driven scale review
 
