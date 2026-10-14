@@ -51,7 +51,7 @@ Allowed states: `BACKLOG`, `READY`, `IN_PROGRESS`, `REVIEW`, `VERIFIED`, `BLOCKE
 | T14 | Optional real source connector pilot | P2 | T05; user approval | NEEDS_APPROVAL | v1 | — | — | — | REQUIRED (source/requests) | Do not start without exact approval |
 | T15 | Optional supervised or RL research study | P3 | T03, T09, T11; user approval | NEEDS_APPROVAL | v1 | — | — | — | REQUIRED (data/training/compute) | Do not start without exact approval |
 | T16 | Optional real broker integration (paper only) | P0 safety | T01, T09, T10, T12; separate approval | NEEDS_APPROVAL | v1 | — | — | — | REQUIRED (account connection) | Paper only; live never included |
-| T17 | Benchmark-driven scale review | P3 | T06, T07, T12; measurements | IN_PROGRESS | v1 | master @ 1219568 | — | — | none | dispatched to coder 2026-10-13 (T12 VERIFIED) |
+| T17 | Benchmark-driven scale review | P3 | T06, T07, T12; measurements | FAILED→c1 | v1 | master @ de58025 (working tree) | benchmark/ (new: generator/runner/__main__/__init__), tests/test_benchmark_smoke.py (new) | `pytest tests/test_benchmark_smoke.py` = 4 passed; ruff clean — but generator not fully deterministic (random embedding_id) | none | CEO probe: entity/source/doc/edge/evidence/timestamps deterministic, but emb_<uuid4> differs per run -> violates "generator deterministic"; corrective dispatched |
 
 ## Task completion notes (append below, newest first)
 
