@@ -28,23 +28,18 @@ import zipfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-# Core modules that go in the "core" zip (risk engine + backtest + schemas).
+# Core modules that go in the "core" zip (the runnable offline project:
+# risk engine + backtest + data/retrieval/impact/strategy/evaluation/ledger/
+# benchmark/correlation + execution). The heavy multimodal *code* lives in
+# hermes_bot/signals|agents|fusion but its models are optional, lazily-loaded
+# extras, so shipping the whole package keeps the bundled test suite green.
+# "full" additionally ships the design docs, scripts and replay harness.
 CORE_MODULES = [
-    "hermes_bot/__init__.py",
-    "hermes_bot/schemas.py",
-    "hermes_bot/risk/",
-    "hermes_bot/risk_v2/",
-    "hermes_bot/risk_v2_1/",
-    "hermes_bot/backtest/",
-    "hermes_bot/simulation/",
-    "hermes_bot/portfolio/",
-    "hermes_bot/execution/",
-    "hermes_bot/control_panel.py",
-    "hermes_bot/config.py",
-    "hermes_bot/cli.py",
+    "hermes_bot/",
     "config/",
     "tests/",
     "pyproject.toml",
+    "uv.lock",
     "README.md",
     "LICENSE",
     ".env.example",

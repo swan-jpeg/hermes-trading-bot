@@ -3,6 +3,10 @@
 A modular multi-asset AI trading bot (Python). Goal: **good returns** and
 **resilience against market crashes**, across stocks, ETFs, options, bonds and cash.
 
+**v0.5.0** ships a complete **offline MVP**: the full data → AI → risk → execution
+pipeline running on synthetic/mock data (no network, no broker, **live trading never
+enabled**), with a durable per-task verification registry in `TASK_REGISTRY.md`.
+
 > ⚠️ **BACKTEST BEFORE MONEY, PAPER BEFORE LIVE.** This is a working skeleton with
 > all architecture layers. The risk layer and backtests are mandatory gates
 > before any live order.
@@ -42,6 +46,7 @@ On Windows, just double-click `install_windows.bat` (installs everything and run
 
 | Version | Core (risk engine) | Full (everything) | Changes | Posted (Amsterdam) |
 | --- | --- | --- | --- | --- |
+| v0.5.0 | [core](https://github.com/swan-jpeg/hermes-trading-bot/releases/download/v0.5.0/hermes-trading-bot-v0.5.0-core.zip) | [full](https://github.com/swan-jpeg/hermes-trading-bot/releases/download/v0.5.0/hermes-trading-bot-v0.5.0-full.zip) | Complete **offline MVP** (data + AI + risk, all mocked/local): portfolio v2.1 risk contract + hard limits; validated config + risk-state pipeline; causal RL environment + cost-aware next-bar backtest; canonical catalog + versioned SQLite migrations (v0→v3); typed offline ingestion adapters with timestamp provenance; versioned chunking + provider-neutral mock retrieval; typed temporal economic graph; deterministic evidence-linked Impact Agent; decision engine + portfolio target allocator; approval-bound mock order manager; reproducible evaluation harness; append-only decision ledger + health/recovery; benchmark-driven scale review; **weighted multi-method correlation graph** (rolling Pearson/Spearman/Kendall/dynamic, embedding-derived method weights, per-edge score + certainty + relation-embedding, max 50 edges/node, direct-only correlations to prevent double-counting). Full offline test suite green; **live trading never enabled** | 2026-10-14 17:21 |
 | v0.4.0 | [core](https://github.com/swan-jpeg/hermes-trading-bot/releases/download/v0.4.0/hermes-trading-bot-v0.4.0-core.zip) | [full](https://github.com/swan-jpeg/hermes-trading-bot/releases/download/v0.4.0/hermes-trading-bot-v0.4.0-full.zip) | One Monte Carlo engine: 4 path models (block bootstrap, GBM, jump-diffusion, 2-state regime), gaussian/t copulas (tail dependence), forced crash scenarios (2008, correlation spike, flash crash) wired into pipeline/backtest/WebUI, multi-asset impact shock, bootstrap confidence intervals; VaR/ES/drawdown/crash probability from the same paths; tests 152/152 | 2026-09-28 14:00 |
 | v0.3.1 | [core](https://github.com/swan-jpeg/hermes-trading-bot/releases/download/v0.3.1/hermes-trading-bot-v0.3.1-core.zip) | [full](https://github.com/swan-jpeg/hermes-trading-bot/releases/download/v0.3.1/hermes-trading-bot-v0.3.1-full.zip) | Impact agent → indicators (Category 8: RSI/EMA/momentum/vol/trend) + impact-shocked Monte Carlo, direct from the impact agent; RL combines fusion + impact + indicators (65-dim) | 2026-09-24 |
 | v0.3.0 | [core](https://github.com/swan-jpeg/hermes-trading-bot/releases/download/v0.3.0/hermes-trading-bot-v0.3.0-core.zip) | [full](https://github.com/swan-jpeg/hermes-trading-bot/releases/download/v0.3.0/hermes-trading-bot-v0.3.0-full.zip) | New impact agent (bring-your-own LLM + skill) + new architecture: impact-agent → 60-dim AssetContext → RL-fusion → risk engine (regional/regime as risk inputs) + replay module for historical training | 2026-09-24 08:27 |
@@ -62,6 +67,41 @@ On Windows, just double-click `install_windows.bat` (installs everything and run
 ```
 
 See `PLAN-QWEN.md` for the implementation plan.
+
+### Offline MVP stack (v0.5.0)
+
+A complete, **offline/synthetic** end-to-end stack (no network, no broker, **no live
+trading**) sits under the layers above. Every stage is deterministic and independently
+verified:
+
+```
+ingestion (offline adapters) → canonical catalog + versioned SQLite (v0→v3)
+  → chunking + retrieval (provider-neutral mock embeddings)
+  → typed temporal economic graph
+  → Impact Agent (evidence-linked, deterministic)
+  → decision engine + portfolio target allocator (risk-aware sizing)
+  → approval-bound mock order manager → decision ledger (append-only) + health/recovery
+  ↳ weighted multi-method correlation graph (embedding-derived weights)
+```
+
+- **Risk contract** — portfolio-level v2.1 limits (`max_asset_weight`, `max_gross_exposure`,
+  `max_sector_weight`, `max_leverage=0`, `min_cash_weight`, `max_position_count`), fail-closed.
+- **Data layer** — typed offline ingestion adapters + a canonical catalog with versioned SQLite
+  migrations (v0→v3); source timestamps preserved (no fake UTC).
+- **Retrieval** — versioned chunking (`paragraph_sentence_v1`) + a provider-neutral mock
+  embedding provider (a real model is an approval-gated task, not enabled here).
+- **Impact Agent** — deterministic and evidence-linked; every claim carries a traceable source span.
+- **Decision engine** — volatility-targeted allocation (`min(0.10, target / max(realized, 0.05))`),
+  long-only, no leverage.
+- **Execution** — approval-bound mock order manager: idempotent, fail-closed; the `AlpacaBroker`
+  adapter is disabled in the MVP.
+- **Ledger** — append-only decision ledger + health/recovery (PAUSED on stale price, write failure
+  or unknown broker).
+- **Correlation graph** — a weighted combination of rolling Pearson, Spearman, Kendall-tau and a
+  dynamic conditional correlation; method weights are derived from the two nodes' embeddings; each
+  edge stores a score, a certainty and a relation embedding; ≤50 edges per node; **direct-only**,
+  so a shared neighbour never double-counts a correlation.
+
 
 ## Quick start
 
@@ -137,16 +177,26 @@ only where it works.
 
 ```
 hermes_bot/
-├── data/            # LAYER 1-2: collectors, storage, features
+├── data/            # LAYER 1-2: offline ingestion adapters, storage, canonical catalog,
+│                    #          versioned SQLite migrations, temporal economic graph
 ├── signals/         # LAYER 3: audio/video, reports, alerts, sentiment
 ├── agents/          # LAYER 4: fundamental AI agent
 ├── fusion/          # LAYER 5: fusion model (quality/certainty/emotion)
+├── retrieval/       # chunking (paragraph_sentence_v1) + provider-neutral mock embeddings
+├── impact/          # deterministic, evidence-linked Impact Agent (contracts/core/legacy)
 ├── rl/              # LAYER 6: RL decision (env, reward, policy)
 ├── risk_v2/         # LAYER 6: Monte Carlo engine (bootstrap/GBM/jump-diffusion/regime,
 │                    #          gaussian/t copulas, forced crash scenarios, bootstrap CI)
+├── risk_v2_1/       # LAYER 6: portfolio-level v2.1 risk contract (hard limits, fail-closed)
 ├── simulation/      # LAYER 6: deprecated shim → risk_v2/montecarlo.py
 ├── risk/            # LAYER 6: risk engine (sizing, drawdown, stress, hedging)
 ├── portfolio/       # allocation across asset classes (multi-asset)
+├── strategy.py      # deterministic decision engine + portfolio target allocator
+├── backtest/        # cost-aware next-bar backtest + metrics
+├── evaluation/      # reproducible chronological impact/strategy evaluation harness
+├── ledger/          # append-only decision ledger + health/recovery protocol
+├── benchmark/       # deterministic synthetic generator + scale benchmark
+├── correlation/     # weighted multi-method correlation graph (embedding-derived weights)
 ├── execution/       # LAYER 7: approval-bound order manager → mock/paper broker (no live)
 ├── expansions/      # B2B bottleneck, regime detection, orderflow
 └── webui.py         # web interface (port 9124)
@@ -197,7 +247,7 @@ print(r.var_95, r.expected_shortfall_95, r.crash_probability, r.scenario_table)
 
 ## Windows / GitHub
 
-- This project is ready to push to GitHub (see `git remote add origin ...`).
+- Pushed to GitHub: `https://github.com/swan-jpeg/hermes-trading-bot` (branch `master`).
 - On Windows: install Python 3.11+, `uv`, and run the same commands.
   The `video` extra (mediapipe) usually works well on Windows.
 - API keys go in `.env` (never in code). See `.env.example`.
